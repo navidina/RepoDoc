@@ -4,9 +4,61 @@ import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Down
 import ReactMarkdown from 'https://esm.sh/react-markdown@9.0.1?deps=react@19.2.3';
 // @ts-ignore
 import remarkGfm from 'https://esm.sh/remark-gfm@4.0.0';
+// @ts-ignore
+import mermaid from 'mermaid';
 import { OllamaConfig, ProcessingLog, ChatMessage } from '../types';
 import { IGNORED_DIRS, IGNORED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE } from '../utils/constants';
 import { generateCompletion, checkOllamaConnection, sendChatRequest } from '../services/ollamaService';
+
+// --- Helper Component: Mermaid Renderer ---
+const MermaidRenderer = ({ code }: { code: string }) => {
+  const [svg, setSvg] = useState('');
+  const [isError, setIsError] = useState(false);
+
+  useEffect(() => {
+    const renderDiagram = async () => {
+      if (!code) return;
+      try {
+        setIsError(false);
+        // Initialize with a standard theme that looks good on white background
+        mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+        const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
+        const { svg } = await mermaid.render(id, code);
+        setSvg(svg);
+      } catch (error) {
+        console.error('Mermaid rendering failed:', error);
+        setIsError(true);
+      }
+    };
+
+    renderDiagram();
+  }, [code]);
+
+  if (isError) {
+    return (
+      <div className="bg-red-900/20 border border-red-500/50 p-4 rounded text-left dir-ltr my-4">
+        <p className="text-red-400 text-xs font-mono mb-2">Mermaid Syntax Error</p>
+        <pre className="text-gray-300 text-xs font-mono overflow-auto whitespace-pre-wrap">{code}</pre>
+      </div>
+    );
+  }
+
+  if (!svg) {
+    return (
+       <div className="flex items-center justify-center p-6 bg-gray-800/50 rounded-lg my-4 border border-gray-700">
+         <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+         <span className="ml-2 text-xs text-gray-400 font-mono">Rendering Diagram...</span>
+       </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg p-6 my-6 overflow-x-auto shadow-xl text-center border-4 border-gray-200">
+       <div dangerouslySetInnerHTML={{ __html: svg }} />
+    </div>
+  );
+};
+
 
 const BrowserGenerator: React.FC = () => {
   // --- General State ---
@@ -306,19 +358,8 @@ You are a dedicated Technical Assistant for the project described above.
           const match = /language-(\w+)/.exec(className || '');
           const isMermaid = match && match[1] === 'mermaid';
           
-          if (isMermaid) {
-             return (
-               <div className="bg-white p-4 rounded text-gray-900 overflow-x-auto text-center my-4 border-4 border-gray-200">
-                 <div className="font-mono text-xs text-gray-500 mb-2 border-b pb-1 flex justify-between px-2">
-                    <span>Mermaid Diagram</span>
-                    <span className="text-gray-400">Preview</span>
-                 </div>
-                 <pre className="whitespace-pre font-mono text-xs">{children}</pre>
-                 <div className="text-[10px] text-gray-400 mt-2 italic">
-                   (این کد در GitHub یا ابزارهای Markdown به نمودار گرافیکی تبدیل می‌شود)
-                 </div>
-               </div>
-             );
+          if (!inline && isMermaid) {
+             return <MermaidRenderer code={String(children).replace(/\n$/, '')} />;
           }
 
           return inline ? (
