@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Terminal } from 'lucide-react';
 
 const CliCodeViewer: React.FC = () => {
   const [copiedIndex, setCopiedIndex] = useState(false);
@@ -42,6 +42,10 @@ const CONFIG = {
   ]),
   maxFileSize: 20000 // characters
 };
+
+// ... (Rest of the CLI code remains the same for brevity, users copy the full logic)
+// See previous full implementation for logic details.
+// This is a viewer component.
 
 // --- System Prompts (Table-Based Structure) ---
 const PROMPTS = {
@@ -195,47 +199,74 @@ main();
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-white text-left dir-ltr">1. package.json</h3>
+      {/* File Card 1 */}
+      <div className="bg-white rounded-[2rem] p-8 shadow-soft border border-white">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+             <div className="bg-yellow-100 p-2 rounded-xl text-yellow-700 font-mono text-xs font-bold">JSON</div>
+             <h3 className="text-lg font-bold text-slate-800 text-left dir-ltr">package.json</h3>
+          </div>
           <button 
             onClick={() => copyToClipboard(packageJsonContent, setCopiedPackage)}
-            className="flex items-center gap-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
           >
-            {copiedPackage ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-            {copiedPackage ? 'کپی شد!' : 'کپی'}
+            {copiedPackage ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+            {copiedPackage ? 'کپی شد' : 'کپی کد'}
           </button>
         </div>
-        <pre className="bg-gray-900 p-4 rounded-lg overflow-x-auto text-sm font-mono text-green-300 text-left dir-ltr">
-          {packageJsonContent}
-        </pre>
+        <div className="relative group">
+           <div className="absolute top-4 right-4 flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-500/20"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500/20"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500/20"></div>
+           </div>
+           <pre className="bg-[#1E293B] p-6 rounded-2xl overflow-x-auto text-sm font-mono text-emerald-300 text-left dir-ltr shadow-inner shadow-black/30">
+             {packageJsonContent}
+           </pre>
+        </div>
       </div>
 
-      <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-white text-left dir-ltr">2. index.js (Main Logic)</h3>
+      {/* File Card 2 */}
+      <div className="bg-white rounded-[2rem] p-8 shadow-soft border border-white">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+             <div className="bg-blue-100 p-2 rounded-xl text-blue-700 font-mono text-xs font-bold">JS</div>
+             <h3 className="text-lg font-bold text-slate-800 text-left dir-ltr">index.js</h3>
+          </div>
           <button 
             onClick={() => copyToClipboard(indexJsContent, setCopiedIndex)}
-            className="flex items-center gap-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
           >
-            {copiedIndex ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-            {copiedIndex ? 'کپی شد!' : 'کپی'}
+            {copiedIndex ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+            {copiedIndex ? 'کپی شد' : 'کپی کد'}
           </button>
         </div>
-        <pre className="bg-gray-900 p-4 rounded-lg overflow-x-auto text-sm font-mono text-blue-300 h-96 text-left dir-ltr">
-          {indexJsContent}
-        </pre>
+        <div className="relative">
+           <pre className="bg-[#1E293B] p-6 rounded-2xl overflow-x-auto text-sm font-mono text-blue-300 h-[30rem] text-left dir-ltr shadow-inner shadow-black/30 custom-scrollbar">
+             {indexJsContent}
+           </pre>
+        </div>
       </div>
 
-      <div className="bg-blue-900/30 border border-blue-800 p-4 rounded-lg">
-        <h4 className="font-bold text-blue-400 mb-2">راهنمای اجرا:</h4>
-        <ul className="list-disc list-inside text-sm text-gray-300 space-y-1">
-          <li>یک پوشه جدید ایجاد کنید.</li>
-          <li>فایل‌های بالا را در آن ذخیره کنید.</li>
-          <li className="dir-ltr text-right">دستور <code>npm install</code> را اجرا کنید.</li>
-          <li className="dir-ltr text-right">مطمئن شوید Ollama در حال اجراست: <code>ollama serve</code></li>
-          <li className="dir-ltr text-right">مدل را دریافت کنید: <code>ollama pull qwen2.5-coder:14b</code></li>
-          <li className="dir-ltr text-right">برنامه را اجرا کنید: <code>node index.js /path/to/your/repo</code></li>
+      {/* Instruction Card */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-[2rem] text-white shadow-xl shadow-slate-900/20">
+        <div className="flex items-center gap-3 mb-6">
+           <div className="bg-white/10 p-2.5 rounded-xl"><Terminal className="w-6 h-6" /></div>
+           <h4 className="font-bold text-lg">راهنمای سریع اجرا</h4>
+        </div>
+        <ul className="space-y-4">
+          {[
+            'یک پوشه جدید بسازید و فایل‌های بالا را در آن ذخیره کنید.',
+            'دستور npm install را اجرا کنید تا وابستگی‌ها نصب شوند.',
+            'مطمئن شوید سرویس Ollama در پس‌زمینه در حال اجراست.',
+            'مدل مورد نظر (مثلاً qwen2.5-coder) را پول (pull) کنید.',
+            'با دستور node index.js مسیر پروژه خود را تحلیل کنید.'
+          ].map((item, i) => (
+             <li key={i} className="flex items-start gap-4 text-slate-300 text-sm">
+                <span className="bg-white/10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 shrink-0">{i+1}</span>
+                <span className="leading-relaxed">{item}</span>
+             </li>
+          ))}
         </ul>
       </div>
     </div>

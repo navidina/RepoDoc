@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Server, LayoutTemplate, GitMerge } from 'lucide-react';
+import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Server, LayoutTemplate, GitMerge, ChevronRight, Zap } from 'lucide-react';
 // @ts-ignore
 import ReactMarkdown from 'https://esm.sh/react-markdown@9.0.1?deps=react@19.2.3';
 // @ts-ignore
@@ -20,8 +20,8 @@ const MermaidRenderer = ({ code }: { code: string }) => {
       if (!code) return;
       try {
         setIsError(false);
-        // Initialize with a standard theme that looks good on white background
-        mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+        // Initialize with a light theme matching the dashboard
+        mermaid.initialize({ startOnLoad: false, theme: 'base', themeVariables: { fontFamily: 'Vazirmatn', primaryColor: '#e2e8f0', primaryTextColor: '#1e293b', lineColor: '#64748b' }, securityLevel: 'loose' });
         const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
         const { svg } = await mermaid.render(id, code);
         setSvg(svg);
@@ -36,24 +36,24 @@ const MermaidRenderer = ({ code }: { code: string }) => {
 
   if (isError) {
     return (
-      <div className="bg-red-900/20 border border-red-500/50 p-4 rounded text-left dir-ltr my-4">
-        <p className="text-red-400 text-xs font-mono mb-2">Mermaid Syntax Error</p>
-        <pre className="text-gray-300 text-xs font-mono overflow-auto whitespace-pre-wrap">{code}</pre>
+      <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-left dir-ltr my-4 shadow-sm">
+        <p className="text-red-600 text-xs font-mono mb-2 font-bold">Mermaid Syntax Error</p>
+        <pre className="text-red-800 text-xs font-mono overflow-auto whitespace-pre-wrap bg-red-100/50 p-2 rounded">{code}</pre>
       </div>
     );
   }
 
   if (!svg) {
     return (
-       <div className="flex items-center justify-center p-6 bg-gray-800/50 rounded-lg my-4 border border-gray-700">
-         <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
-         <span className="ml-2 text-xs text-gray-400 font-mono">Rendering Diagram...</span>
+       <div className="flex items-center justify-center p-8 bg-slate-50 rounded-2xl my-4 border border-dashed border-slate-300">
+         <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+         <span className="ml-3 text-sm text-slate-500 font-medium">در حال ترسیم دیاگرام...</span>
        </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg p-6 my-6 overflow-x-auto shadow-xl text-center border-4 border-gray-200">
+    <div className="bg-white rounded-2xl p-6 my-6 overflow-x-auto shadow-soft text-center border border-slate-100">
        <div dangerouslySetInnerHTML={{ __html: svg }} />
     </div>
   );
@@ -347,16 +347,16 @@ You are a dedicated Technical Assistant for the project described above.
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-blue-300 my-4 border-b border-gray-700 pb-2" {...props} />,
-        h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-white mt-8 mb-4 flex items-center gap-2" {...props} />,
-        h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold text-blue-200 mt-6 mb-2" {...props} />,
-        p: ({node, ...props}: any) => <p className="text-gray-300 leading-7 mb-3 text-justify" {...props} />,
-        ul: ({node, ...props}: any) => <ul className="list-disc list-outside mr-6 space-y-1 mb-3 text-gray-300" {...props} />,
-        ol: ({node, ...props}: any) => <ol className="list-decimal list-outside mr-6 space-y-1 mb-3 text-gray-300" {...props} />,
-        table: ({node, ...props}: any) => <div className="overflow-x-auto my-4 border border-gray-700 rounded"><table className="w-full text-right" {...props} /></div>,
-        thead: ({node, ...props}: any) => <thead className="bg-gray-800 text-gray-100" {...props} />,
-        th: ({node, ...props}: any) => <th className="px-4 py-2 border-b border-gray-600 font-bold text-blue-300" {...props} />,
-        td: ({node, ...props}: any) => <td className="px-4 py-2 border-b border-gray-700/50" {...props} />,
+        h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-slate-900 my-6 border-b-2 border-slate-100 pb-3" {...props} />,
+        h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-slate-800 mt-8 mb-4 flex items-center gap-2" {...props} />,
+        h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold text-slate-700 mt-6 mb-2" {...props} />,
+        p: ({node, ...props}: any) => <p className="text-slate-600 leading-8 mb-4 text-justify" {...props} />,
+        ul: ({node, ...props}: any) => <ul className="list-disc list-outside mr-6 space-y-2 mb-4 text-slate-600" {...props} />,
+        ol: ({node, ...props}: any) => <ol className="list-decimal list-outside mr-6 space-y-2 mb-4 text-slate-600" {...props} />,
+        table: ({node, ...props}: any) => <div className="overflow-x-auto my-6 border border-slate-200 rounded-xl shadow-sm"><table className="w-full text-right" {...props} /></div>,
+        thead: ({node, ...props}: any) => <thead className="bg-slate-50 text-slate-700" {...props} />,
+        th: ({node, ...props}: any) => <th className="px-6 py-3 border-b border-slate-200 font-bold text-xs uppercase tracking-wider text-slate-500" {...props} />,
+        td: ({node, ...props}: any) => <td className="px-6 py-4 border-b border-slate-100 text-sm" {...props} />,
         code: ({node, inline, className, children, ...props}: any) => {
           const match = /language-(\w+)/.exec(className || '');
           const isMermaid = match && match[1] === 'mermaid';
@@ -366,14 +366,14 @@ You are a dedicated Technical Assistant for the project described above.
           }
 
           return inline ? (
-            <code className="bg-gray-800 text-pink-300 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-700" {...props}>{children}</code>
+            <code className="bg-slate-100 text-pink-600 px-1.5 py-0.5 rounded text-sm font-mono border border-slate-200 shadow-sm" {...props}>{children}</code>
           ) : (
-            <div className="my-3 dir-ltr"><code className="block bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto text-sm font-mono text-gray-300 border border-gray-700" {...props}>{children}</code></div>
+            <div className="my-4 dir-ltr"><code className="block bg-[#1E293B] p-4 rounded-xl overflow-x-auto text-sm font-mono text-slate-300 border border-slate-800 shadow-lg" {...props}>{children}</code></div>
           )
         },
         // Custom summary/details styling
-        details: ({node, ...props}: any) => <details className="bg-gray-800/50 border border-gray-700 rounded-lg mb-2 overflow-hidden open:bg-gray-800 transition-all" {...props} />,
-        summary: ({node, ...props}: any) => <summary className="cursor-pointer p-3 font-mono text-sm hover:bg-gray-700/50 select-none text-blue-300 outline-none" {...props} />
+        details: ({node, ...props}: any) => <details className="group bg-white border border-slate-200 rounded-xl mb-3 overflow-hidden transition-all shadow-sm hover:shadow-md" {...props} />,
+        summary: ({node, ...props}: any) => <summary className="cursor-pointer p-4 font-mono text-sm font-medium hover:bg-slate-50 select-none text-slate-700 outline-none flex items-center gap-2" {...props} />
       }}
     >
       {content}
@@ -381,103 +381,117 @@ You are a dedicated Technical Assistant for the project described above.
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-      {/* Left Panel: Controls */}
-      <div className="bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-700 flex flex-col gap-6">
-        <div>
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Folder className="w-5 h-5 text-blue-400" />
-            ۱. انتخاب پوشه پروژه
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full">
+      {/* Left Panel: Controls (Styled as a dashboard widget column) */}
+      <div className="xl:col-span-4 flex flex-col gap-6 h-full overflow-y-auto pr-1">
+        
+        {/* Widget: File Selection */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
+          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center justify-between">
+             <span className="flex items-center gap-3">
+               <div className="bg-blue-100 p-2 rounded-xl"><Folder className="w-5 h-5 text-blue-600" /></div>
+               انتخاب پروژه
+             </span>
+             {files && <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold">{files.length} فایل</span>}
           </h2>
-          <div className="relative">
+          
+          <div className="relative group">
             <input
               type="file"
               // @ts-ignore
               webkitdirectory=""
               directory=""
               onChange={handleDirectorySelect}
-              className="block w-full text-sm text-gray-400
-                file:ml-4 file:py-2 file:px-4
-                file:rounded-full file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-600 file:text-white
-                hover:file:bg-blue-700
-                cursor-pointer border border-gray-600 rounded-lg bg-gray-900"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               disabled={isProcessing}
             />
-          </div>
-          {files && (
-            <p className="mt-2 text-sm text-green-400">
-              {files.length} فایل شناسایی شد
-            </p>
-          )}
-        </div>
-
-        <div>
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-purple-400" />
-            ۲. سطوح مستندسازی
-          </h2>
-          <div className="grid grid-cols-2 gap-3">
-             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.root ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
-                <input type="checkbox" checked={docLevels.root} onChange={e => setDocLevels({...docLevels, root: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white">ریشه (README)</span>
-                  <span className="text-[10px] text-gray-400">معرفی و نصب</span>
-                </div>
-             </label>
-             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.arch ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
-                <input type="checkbox" checked={docLevels.arch} onChange={e => setDocLevels({...docLevels, arch: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white">معماری</span>
-                  <span className="text-[10px] text-gray-400">دیاگرام و پترن‌ها</span>
-                </div>
-             </label>
-             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.sequence ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
-                <input type="checkbox" checked={docLevels.sequence} onChange={e => setDocLevels({...docLevels, sequence: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white">نمودار توالی</span>
-                  <span className="text-[10px] text-gray-400">مخصوص مدیر محصول</span>
-                </div>
-             </label>
-             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.ops ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
-                <input type="checkbox" checked={docLevels.ops} onChange={e => setDocLevels({...docLevels, ops: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white">عملیاتی (DevOps)</span>
-                  <span className="text-[10px] text-gray-400">دیپلوی و کانفیگ</span>
-                </div>
-             </label>
-             <label className={`col-span-2 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.code ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
-                <input type="checkbox" checked={docLevels.code} onChange={e => setDocLevels({...docLevels, code: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white">سطح کد (تحلیل کامل)</span>
-                  <span className="text-[10px] text-gray-400">تحلیل فایل به فایل (زمان‌بر)</span>
-                </div>
-             </label>
+            <div className={`border-2 border-dashed rounded-2xl p-8 transition-all text-center group-hover:border-blue-400 group-hover:bg-blue-50/50 ${files ? 'border-green-300 bg-green-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
+               <div className="bg-white p-3 rounded-full shadow-sm w-12 h-12 mx-auto flex items-center justify-center mb-3 text-blue-500 group-hover:scale-110 transition-transform">
+                 <Upload className="w-6 h-6" />
+               </div>
+               <p className="text-sm font-bold text-slate-700 mb-1">{files ? 'پوشه انتخاب شد' : 'انتخاب پوشه کد'}</p>
+               <p className="text-xs text-slate-400">کلیک کنید یا درگ کنید</p>
+            </div>
           </div>
         </div>
 
-        <div>
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-400" />
-            ۳. تنظیمات مدل زبانی
+        {/* Widget: Config Levels */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
+          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-3">
+             <div className="bg-purple-100 p-2 rounded-xl"><Layers className="w-5 h-5 text-purple-600" /></div>
+             سطوح تحلیل
           </h2>
           <div className="space-y-3">
-             <input 
-                type="text" 
-                value={config.baseUrl} 
-                onChange={e => setConfig({...config, baseUrl: e.target.value})}
-                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm dir-ltr text-left placeholder-gray-500"
-                placeholder="URL (http://localhost:11434)"
-             />
-             <input 
-                type="text" 
-                list="model-suggestions"
-                value={config.model} 
-                onChange={e => setConfig({...config, model: e.target.value})}
-                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm dir-ltr text-left placeholder-gray-500"
-                placeholder="Model Name (e.g., qwen2.5-coder:14b)"
-             />
+             {[
+               { id: 'root', label: 'ریشه (README)', desc: 'معرفی و نصب', color: 'blue' },
+               { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', color: 'indigo' },
+               { id: 'sequence', label: 'نمودار توالی', desc: 'سناریوی اصلی', color: 'purple' },
+               { id: 'ops', label: 'عملیاتی (DevOps)', desc: 'دیپلوی و کانفیگ', color: 'pink' },
+               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل', color: 'slate' }
+             ].map((level) => (
+                <label key={level.id} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all duration-300 group hover:shadow-md ${
+                  // @ts-ignore
+                  docLevels[level.id] 
+                  ? 'bg-slate-900 border-slate-900 shadow-lg shadow-slate-900/10' 
+                  : 'bg-white border-slate-100 hover:border-slate-300'
+                }`}>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    // @ts-ignore
+                    docLevels[level.id] ? 'border-white bg-transparent' : 'border-slate-300 bg-slate-50'
+                  }`}>
+                    {/* @ts-ignore */}
+                    {docLevels[level.id] && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
+                  </div>
+                  <input type="checkbox" 
+                    // @ts-ignore
+                    checked={docLevels[level.id]} 
+                    // @ts-ignore
+                    onChange={e => setDocLevels({...docLevels, [level.id]: e.target.checked})} 
+                    className="hidden" 
+                  />
+                  <div className="flex flex-col">
+                    <span className={`text-sm font-bold transition-colors ${
+                      // @ts-ignore
+                      docLevels[level.id] ? 'text-white' : 'text-slate-700'
+                    }`}>{level.label}</span>
+                    <span className={`text-[11px] transition-colors ${
+                      // @ts-ignore
+                      docLevels[level.id] ? 'text-slate-400' : 'text-slate-400'
+                    }`}>{level.desc}</span>
+                  </div>
+                </label>
+             ))}
+          </div>
+        </div>
+
+        {/* Widget: LLM Config */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
+          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-3">
+             <div className="bg-orange-100 p-2 rounded-xl"><Zap className="w-5 h-5 text-orange-600" /></div>
+             پیکربندی هوش مصنوعی
+          </h2>
+          <div className="space-y-4">
+             <div>
+               <label className="text-xs font-bold text-slate-500 mb-2 block mr-1">آدرس سرور Ollama</label>
+               <input 
+                  type="text" 
+                  value={config.baseUrl} 
+                  onChange={e => setConfig({...config, baseUrl: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-700 text-sm dir-ltr text-left placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  placeholder="http://localhost:11434"
+               />
+             </div>
+             <div>
+               <label className="text-xs font-bold text-slate-500 mb-2 block mr-1">مدل زبانی</label>
+               <input 
+                  type="text" 
+                  list="model-suggestions"
+                  value={config.model} 
+                  onChange={e => setConfig({...config, model: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-700 text-sm dir-ltr text-left placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  placeholder="e.g., qwen2.5-coder:14b"
+               />
+             </div>
              <datalist id="model-suggestions">
                 <option value="qwen2.5-coder:14b" />
                 <option value="qwen2.5-coder:7b" />
@@ -487,64 +501,71 @@ You are a dedicated Technical Assistant for the project described above.
           </div>
         </div>
 
+        {/* Action Button */}
         <div>
           <button
             onClick={processRepository}
             disabled={!files || isProcessing}
-            className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all mb-4
+            className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 active:scale-95 text-lg
               ${!files || isProcessing 
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg'}`}
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' 
+                : 'bg-slate-900 text-white shadow-slate-900/30'}`}
           >
-            {isProcessing ? <Loader2 className="animate-spin" /> : <Play className="rotate-180" />} 
-            {isProcessing ? 'در حال تولید مستندات...' : 'شروع آنالیز'}
+            {isProcessing ? <Loader2 className="animate-spin" /> : <Play className="fill-current" />} 
+            {isProcessing ? 'در حال تحلیل...' : 'شروع آنالیز پروژه'}
           </button>
 
           {(isProcessing || progress > 0) && (
-            <div className="mb-4 animate-in fade-in duration-500">
-              <div className="flex justify-between text-xs text-gray-400 mb-2 font-mono">
-                <span>پیشرفت پروژه</span>
-                <span>{progress}%</span>
+            <div className="mt-6 bg-white p-4 rounded-2xl shadow-soft">
+              <div className="flex justify-between text-xs text-slate-500 mb-2 font-bold px-1">
+                <span>پیشرفت کلی</span>
+                <span className="text-blue-600">{progress}%</span>
               </div>
-              <div className="w-full bg-gray-900 rounded-full h-3 overflow-hidden border border-gray-700 relative">
+              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
                 <div 
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full transition-all duration-300 ease-out shadow-[0_0_12px_rgba(59,130,246,0.6)] relative" 
+                  className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500 ease-out relative" 
                   style={{ width: `${progress}%` }}
                 >
-                  <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                  <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-gray-900 rounded-lg p-4 border border-gray-700 font-mono text-xs max-h-48">
-          <div className="text-gray-400 mb-2 font-bold sticky top-0 bg-gray-900 pb-2 border-b border-gray-800">گزارش پردازش:</div>
-          {logs.length === 0 && <span className="text-gray-600 italic">لاگ‌ها اینجا نمایش داده می‌شوند...</span>}
-          {logs.map((log, i) => (
-            <div key={i} className={`mb-1 ${
-              log.type === 'error' ? 'text-red-400' : 
-              log.type === 'success' ? 'text-green-400' : 
-              'text-blue-300'
-            }`}>
-              <span className="opacity-50 text-[10px] ml-2 inline-block dir-ltr">[{log.timestamp}]</span>
-              {log.message}
-            </div>
-          ))}
+        {/* Logs */}
+        <div className="flex-1 overflow-y-auto bg-slate-50 rounded-[2rem] p-5 border border-slate-100 font-mono text-xs min-h-[150px] shadow-inner-light">
+          <div className="text-slate-400 mb-3 font-bold sticky top-0 bg-slate-50 pb-2 border-b border-slate-200 flex items-center gap-2">
+            <Info className="w-3 h-3" />
+            گزارش لحظه‌ای
+          </div>
+          {logs.length === 0 && <span className="text-slate-400 italic pl-2">منتظر شروع عملیات...</span>}
+          <div className="space-y-2">
+            {logs.map((log, i) => (
+              <div key={i} className={`flex items-start gap-2 ${
+                log.type === 'error' ? 'text-red-500' : 
+                log.type === 'success' ? 'text-emerald-600' : 
+                'text-slate-600'
+              }`}>
+                <span className="opacity-40 text-[10px] whitespace-nowrap dir-ltr font-sans bg-slate-200 px-1 rounded mt-0.5">{log.timestamp}</span>
+                <span className="leading-relaxed">{log.message}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Right Panel: Output & Chat */}
-      <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 flex flex-col h-full overflow-hidden">
+      {/* Right Panel: Output & Chat (Styled as main content area) */}
+      <div className="xl:col-span-8 bg-white rounded-[2.5rem] shadow-soft border border-white flex flex-col h-full overflow-hidden relative">
         {/* Header Tabs */}
-        <div className="flex items-center border-b border-gray-700 px-4 justify-between">
-           <div className="flex">
+        <div className="flex items-center px-8 pt-8 pb-4 justify-between bg-white z-10">
+           <div className="flex bg-slate-100/80 p-1.5 rounded-2xl">
             <button 
               onClick={() => setActiveTab('docs')}
-              className={`flex items-center gap-2 px-4 py-4 text-sm font-bold border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
                 activeTab === 'docs' 
-                ? 'border-blue-500 text-white' 
-                : 'border-transparent text-gray-400 hover:text-gray-200'
+                ? 'bg-white text-slate-900 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
               }`}
             >
               <FileIcon className="w-4 h-4" />
@@ -552,10 +573,10 @@ You are a dedicated Technical Assistant for the project described above.
             </button>
             <button 
               onClick={() => setActiveTab('chat')}
-              className={`flex items-center gap-2 px-4 py-4 text-sm font-bold border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
                 activeTab === 'chat' 
-                ? 'border-green-500 text-white' 
-                : 'border-transparent text-gray-400 hover:text-gray-200'
+                ? 'bg-white text-slate-900 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
               }`}
             >
               <MessageSquare className="w-4 h-4" />
@@ -564,19 +585,21 @@ You are a dedicated Technical Assistant for the project described above.
            </div>
            
            {hasContext && (
-             <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-900/30 border border-green-800 rounded text-[10px] text-green-400 animate-in fade-in">
+             <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700 font-bold animate-in fade-in">
                 <Database className="w-3 h-3" />
-                مستندات در حافظه
+                محتوا بارگذاری شد
              </div>
            )}
         </div>
 
+        <div className="h-px bg-slate-100 mx-8"></div>
+
         {/* --- DOCS TAB CONTENT --- */}
         {activeTab === 'docs' && (
           <>
-            <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-gray-700 gap-4 bg-gray-800/50">
-               <div className="flex flex-wrap items-center gap-2 w-full justify-between">
-                <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row justify-between items-center px-8 py-4 gap-4 bg-white">
+               <div className="flex flex-wrap items-center gap-3 w-full justify-between">
+                <div className="flex gap-3">
                   <input 
                     type="file" 
                     accept=".md,.markdown" 
@@ -586,50 +609,51 @@ You are a dedicated Technical Assistant for the project described above.
                   />
                   <button 
                     onClick={() => importInputRef.current?.click()}
-                    className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded flex items-center gap-2 transition-colors border border-gray-600"
-                    title="بارگذاری فایل Markdown"
+                    className="text-xs font-bold bg-white text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all border border-slate-200 shadow-sm"
                   >
                     <Upload className="w-4 h-4" /> <span className="hidden sm:inline">ایمپورت</span>
                   </button>
 
                   {generatedDoc && (
-                    <button onClick={downloadMarkdown} className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded flex items-center gap-2 transition-colors border border-gray-600">
-                      <Download className="w-4 h-4" /> <span className="hidden sm:inline">دانلود</span>
+                    <button onClick={downloadMarkdown} className="text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-slate-900/20">
+                      <Download className="w-4 h-4" /> <span className="hidden sm:inline">دانلود MD</span>
                     </button>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 bg-gray-900 p-1 rounded-lg border border-gray-600">
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                   <button 
                     onClick={() => setViewMode('preview')}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-all ${
-                      viewMode === 'preview' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      viewMode === 'preview' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
-                    <Eye className="w-4 h-4" />
+                    <Eye className="w-3 h-3" /> نمایش
                   </button>
                   <button 
                     onClick={() => setViewMode('raw')}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-all ${
-                      viewMode === 'raw' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      viewMode === 'raw' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
-                    <Code className="w-4 h-4" />
+                    <Code className="w-3 h-3" /> کد
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 bg-gray-900 p-6 overflow-y-auto text-gray-300">
+            <div className="flex-1 bg-white px-8 pb-8 overflow-y-auto">
               {!generatedDoc ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-600 italic gap-2">
-                  <Folder className="w-12 h-12 opacity-20" />
-                  <span>پیش‌نمایش مستندات اینجا نمایش داده می‌شود...</span>
+                <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4">
+                  <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center">
+                    <LayoutTemplate className="w-10 h-10" />
+                  </div>
+                  <span className="font-medium">پیش‌نمایش مستندات اینجا نمایش داده می‌شود...</span>
                 </div>
               ) : viewMode === 'raw' ? (
-                <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap">{generatedDoc}</pre>
+                <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap bg-slate-900 text-slate-300 p-6 rounded-2xl dir-ltr shadow-inner shadow-black/50">{generatedDoc}</pre>
               ) : (
-                <div className="prose prose-invert prose-blue max-w-none dir-rtl">
+                <div className="prose prose-slate max-w-none dir-rtl">
                   <MarkdownRenderer content={generatedDoc} />
                 </div>
               )}
@@ -639,35 +663,35 @@ You are a dedicated Technical Assistant for the project described above.
 
         {/* --- CHAT TAB CONTENT --- */}
         {activeTab === 'chat' && (
-           <div className="flex flex-col h-full bg-gray-900">
+           <div className="flex flex-col h-full bg-slate-50/50">
              {/* Chat History */}
-             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6">
                {chatMessages.filter(m => m.role !== 'system').length === 0 ? (
-                 <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4 opacity-50">
-                    <Bot className="w-16 h-16" />
-                    <p className="text-center">سوالات برنامه‌نویسی خود را بپرسید.<br/>مدل فعلی: <span className="font-mono text-blue-400">{config.model}</span></p>
-                    {!hasContext && (
-                      <p className="text-xs text-yellow-500 mt-2 bg-yellow-900/20 px-3 py-1 rounded">
-                        برای پاسخ‌دهی دقیق، لطفا ابتدا آنالیز کنید یا فایل مستندات را ایمپورت کنید.
-                      </p>
-                    )}
+                 <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-6 opacity-60">
+                    <div className="w-20 h-20 bg-white rounded-3xl shadow-soft flex items-center justify-center">
+                       <Bot className="w-10 h-10 text-slate-300" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-bold text-slate-600 text-lg">دستیار هوشمند پروژه</p>
+                      <p className="text-sm mt-1">مدل فعال: <span className="font-mono text-blue-500 bg-blue-50 px-2 py-0.5 rounded">{config.model}</span></p>
+                    </div>
                  </div>
                ) : (
                  chatMessages.filter(m => m.role !== 'system').map((msg, idx) => (
                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                     <div className={`max-w-[85%] rounded-2xl p-4 ${
+                     <div className={`max-w-[85%] rounded-[1.5rem] p-5 shadow-sm ${
                        msg.role === 'user' 
-                       ? 'bg-blue-600 text-white rounded-br-none' 
-                       : 'bg-gray-800 border border-gray-700 text-gray-200 rounded-bl-none'
+                       ? 'bg-slate-900 text-white rounded-br-none shadow-slate-900/10' 
+                       : 'bg-white border border-slate-100 text-slate-700 rounded-bl-none shadow-soft'
                      }`}>
-                       <div className="flex items-center gap-2 mb-2 opacity-70 text-xs border-b border-white/10 pb-1">
-                          {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
-                          <span>{msg.role === 'user' ? 'شما' : config.model}</span>
+                       <div className="flex items-center gap-2 mb-3 opacity-70 text-xs pb-2 border-b border-white/10">
+                          {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3 text-blue-500" />}
+                          <span className="font-bold">{msg.role === 'user' ? 'شما' : 'دستیار هوشمند'}</span>
                        </div>
                        {msg.role === 'user' ? (
-                         <div className="whitespace-pre-wrap">{msg.content}</div>
+                         <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
                        ) : (
-                         <div className="prose prose-invert prose-sm max-w-none dir-rtl">
+                         <div className="prose prose-slate prose-sm max-w-none dir-rtl">
                            <MarkdownRenderer content={msg.content} />
                          </div>
                        )}
@@ -677,40 +701,40 @@ You are a dedicated Technical Assistant for the project described above.
                )}
                {isChatLoading && (
                  <div className="flex justify-end">
-                   <div className="bg-gray-800 border border-gray-700 rounded-2xl rounded-bl-none p-4 flex items-center gap-3">
-                     <Loader2 className="w-4 h-4 animate-spin text-green-400" />
-                     <span className="text-gray-400 text-sm animate-pulse">در حال نوشتن...</span>
+                   <div className="bg-white border border-slate-100 rounded-[1.5rem] rounded-bl-none p-4 flex items-center gap-3 shadow-soft">
+                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                     <span className="text-slate-500 text-sm font-medium">در حال تایپ...</span>
                    </div>
                  </div>
                )}
              </div>
 
              {/* Chat Input */}
-             <div className="p-4 bg-gray-800 border-t border-gray-700">
-               <div className="relative">
+             <div className="p-6 bg-white border-t border-slate-100">
+               <div className="relative shadow-soft rounded-2xl">
                  <textarea
                    value={chatInput}
                    onChange={(e) => setChatInput(e.target.value)}
                    onKeyDown={handleKeyDown}
-                   placeholder={hasContext ? "سوال در مورد این پروژه..." : "سوال عمومی خود را بپرسید..."}
-                   className="w-full bg-gray-900 border border-gray-600 rounded-xl p-3 pl-12 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none h-14 max-h-32 text-sm"
+                   placeholder={hasContext ? "سوال خود را درباره پروژه بپرسید..." : "پیام خود را بنویسید..."}
+                   className="w-full bg-slate-50 border-0 rounded-2xl p-4 pl-14 text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-100 resize-none h-16 max-h-32 text-sm leading-relaxed"
                    disabled={isChatLoading}
                  />
                  <button
                    onClick={handleSendMessage}
                    disabled={!chatInput.trim() || isChatLoading}
-                   className={`absolute left-2 top-2 p-2 rounded-lg transition-colors ${
+                   className={`absolute left-2 top-2 bottom-2 aspect-square rounded-xl transition-all flex items-center justify-center ${
                      !chatInput.trim() || isChatLoading
-                     ? 'text-gray-600 cursor-not-allowed'
-                     : 'bg-blue-600 text-white hover:bg-blue-500'
+                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                     : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'
                    }`}
                  >
-                   <Send className="w-4 h-4 rotate-180" />
+                   <Send className="w-5 h-5 rotate-180" />
                  </button>
                </div>
-               <div className="text-[10px] text-gray-500 mt-2 text-center flex justify-center items-center gap-2">
-                 <span>پاسخ‌ها توسط مدل محلی تولید می‌شوند.</span>
-                 {hasContext && <span className="text-green-500 font-bold">(حالت پروژه محور فعال است)</span>}
+               <div className="text-[10px] text-slate-400 mt-3 text-center flex justify-center items-center gap-2 font-medium">
+                 <span>Powered by Local LLM</span>
+                 {hasContext && <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Context Aware</span>}
                </div>
              </div>
            </div>
