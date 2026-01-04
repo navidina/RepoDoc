@@ -238,6 +238,11 @@ You are a dedicated Technical Assistant for the project described above.
         }
       }
 
+      // --- CRITICAL FIX: Include full source code in the context for high-level tasks ---
+      const fullSourceContext = sourceFiles.map(f => `\n--- SOURCE FILE: ${f.path} ---\n${f.content}`).join('\n');
+      const globalContextWithSource = `Project File Tree:\n${fileTree}\n\nConfiguration Files:\n${configContents.join('')}\n\nSource Code Content:\n${fullSourceContext}`;
+      // --------------------------------------------------------------------------------
+
       // Calculate total steps based on selected levels
       let totalSteps = 0;
       if (docLevels.root) totalSteps += 1;
@@ -260,6 +265,7 @@ You are a dedicated Technical Assistant for the project described above.
       // --- LEVEL 1: ROOT Documentation ---
       if (docLevels.root) {
         addLog('سطح ۱: تولید مستندات ریشه (README)...', 'info');
+        // We keep the lighter context for README to avoid unnecessary token usage, unless requested otherwise
         const readmeContent = await generateCompletion(config, globalContext, PROMPT_LEVEL_1_ROOT);
         documentation += `${readmeContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
@@ -269,7 +275,8 @@ You are a dedicated Technical Assistant for the project described above.
       // --- LEVEL 3: Architecture Documentation ---
       if (docLevels.arch) {
         addLog('سطح ۳: تحلیل معماری و سیستم...', 'info');
-        const archPrompt = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: یک دیاگرام معماری (Architecture Diagram) با فرمت Mermaid (flowchart TD) تولید کن که کامپوننت‌های اصلی را نشان دهد. حتما متن‌ها را در کوتیشن "..." بگذار.`;
+        // Fix: Use globalContextWithSource to include actual code
+        const archPrompt = `${globalContextWithSource}\n\nدستور اصلی: با توجه به کدهای بالا، یک دیاگرام معماری دقیق (Architecture Diagram) با فرمت Mermaid (flowchart TD) تولید کن که نشان دهد کامپوننت‌های کد (مثل توابع، کلاس‌ها و APIها) چگونه با هم در ارتباط هستند. حتما متن‌ها را در کوتیشن "..." بگذار.`;
         const archContent = await generateCompletion(config, archPrompt, PROMPT_LEVEL_3_ARCH);
         documentation += `## 🏗 معماری سیستم\n\n${archContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
@@ -289,8 +296,8 @@ You are a dedicated Technical Assistant for the project described above.
       // --- LEVEL 5: Sequence Diagram (NEW) ---
       if (docLevels.sequence) {
         addLog('سطح ۵: ترسیم نمودار توالی (Sequence Diagram)...', 'info');
-        // Reinforced user-side prompt to ensure Persian language and Mermaid format
-        const sequenceContext = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: بر اساس فایل‌های بالا، یک سناریوی اصلی (مثل لاگین، پردازش، یا گزارش) انتخاب کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است و متن‌ها باید در کوتیشن باشند.`;
+        // Fix: Use globalContextWithSource to include actual code for accurate logic tracing
+        const sequenceContext = `${globalContextWithSource}\n\nدستور اصلی: بر اساس منطق موجود در کدها (Source Code Content)، سناریوی اصلی برنامه (مثلاً نحوه پردازش یک درخواست توسط کاربر) را استخراج کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است و متن‌ها باید در کوتیشن باشند.`;
         const seqContent = await generateCompletion(config, sequenceContext, PROMPT_LEVEL_5_SEQUENCE);
         documentation += `## 🔄 نمودار توالی فرآیندها (Sequence Diagram)\n\n${seqContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
@@ -563,7 +570,7 @@ You are a dedicated Technical Assistant for the project described above.
         </div>
 
         {/* Logs */}
-        <div className="flex-1 overflow-y-auto bg-slate-50 rounded-[2rem] p-5 border border-slate-100 font-mono text-xs min-h-[150px] shadow-inner-light">
+        <div className="flex-1 overflow-y-auto bg-slate-50 rounded-[2rem] p-5 border border-slate-100 font-sans text-xs min-h-[150px] shadow-inner-light">
           <div className="text-slate-400 mb-3 font-bold sticky top-0 bg-slate-50 pb-2 border-b border-slate-200 flex items-center gap-2">
             <Info className="w-3 h-3" />
             گزارش لحظه‌ای
