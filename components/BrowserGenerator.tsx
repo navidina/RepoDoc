@@ -5,7 +5,7 @@ import ReactMarkdown from 'https://esm.sh/react-markdown@9.0.1?deps=react@19.2.3
 // @ts-ignore
 import remarkGfm from 'https://esm.sh/remark-gfm@4.0.0';
 // @ts-ignore
-import mermaid from 'mermaid';
+import mermaid from 'https://esm.sh/mermaid@10.9.0';
 import { OllamaConfig, ProcessingLog, ChatMessage } from '../types';
 import { IGNORED_DIRS, IGNORED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE } from '../utils/constants';
 import { generateCompletion, checkOllamaConnection, sendChatRequest } from '../services/ollamaService';
@@ -189,13 +189,15 @@ You are a dedicated Technical Assistant for the project described above.
       };
 
       for (const file of fileList) {
-        const pathParts = file.webkitRelativePath.split('/');
+        // Use webkitRelativePath for structure, fallback to name if missing
+        const filePath = file.webkitRelativePath || file.name;
+        const pathParts = filePath.split('/');
         const hasIgnoredDir = pathParts.some(part => IGNORED_DIRS.has(part));
         const extension = '.' + file.name.split('.').pop()?.toLowerCase();
         
         if (hasIgnoredDir || IGNORED_EXTENSIONS.has(extension)) continue;
 
-        fileTree += `- ${file.webkitRelativePath}\n`;
+        fileTree += `- ${filePath}\n`;
 
         if (CONFIG_FILES.has(file.name)) {
           const content = await readFileContent(file);
@@ -203,7 +205,7 @@ You are a dedicated Technical Assistant for the project described above.
           addLog(`فایل کانفیگ پیدا شد: ${file.name}`, 'success');
         } else if (file.size < 20000) {
           const content = await readFileContent(file);
-          sourceFiles.push({ path: file.webkitRelativePath, content });
+          sourceFiles.push({ path: filePath, content });
         }
       }
 
@@ -238,7 +240,8 @@ You are a dedicated Technical Assistant for the project described above.
       // --- LEVEL 3: Architecture Documentation ---
       if (docLevels.arch) {
         addLog('سطح ۳: تحلیل معماری و سیستم...', 'info');
-        const archContent = await generateCompletion(config, globalContext, PROMPT_LEVEL_3_ARCH);
+        const archPrompt = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: یک دیاگرام معماری (Architecture Diagram) با فرمت Mermaid (graph TD) تولید کن که کامپوننت‌های اصلی را نشان دهد.`;
+        const archContent = await generateCompletion(config, archPrompt, PROMPT_LEVEL_3_ARCH);
         documentation += `## 🏗 معماری سیستم\n\n${archContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
         updateProgress();
@@ -257,8 +260,8 @@ You are a dedicated Technical Assistant for the project described above.
       // --- LEVEL 5: Sequence Diagram (NEW) ---
       if (docLevels.sequence) {
         addLog('سطح ۵: ترسیم نمودار توالی (Sequence Diagram)...', 'info');
-        // We pass global context + a hint to look at source files structure implicitly
-        const sequenceContext = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nPlease infer the main application flow based on file names and typical patterns.`;
+        // Reinforced user-side prompt to ensure Persian language and Mermaid format
+        const sequenceContext = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: بر اساس فایل‌های بالا، یک سناریوی اصلی (مثل لاگین، پردازش، یا گزارش) انتخاب کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است.`;
         const seqContent = await generateCompletion(config, sequenceContext, PROMPT_LEVEL_5_SEQUENCE);
         documentation += `## 🔄 نمودار توالی فرآیندها (Sequence Diagram)\n\n${seqContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
