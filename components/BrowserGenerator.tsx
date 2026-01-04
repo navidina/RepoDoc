@@ -16,21 +16,36 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Function to fix common LLM mistakes in Mermaid syntax
+  const fixMermaidSyntax = (rawCode: string) => {
+    let fixed = rawCode
+      .replace(/```mermaid/g, '')
+      .replace(/```/g, '')
+      .trim();
+    
+    // Fix 1: Ensure flowchart TD if mistakenly graph TD
+    if (fixed.startsWith('graph ')) {
+       fixed = fixed.replace('graph ', 'flowchart ');
+    }
+
+    // Fix 2: Quote unquoted parentheses in node labels (The "cli()" crasher)
+    // Regex matches: [ followed by anything NOT quote, then (, then ), then anything NOT quote, then ]
+    // Converts A[text()] to A["text()"]
+    // It captures the content inside [] and wraps it in quotes if it contains ()
+    fixed = fixed.replace(/\[([^"\]\n]*\([^"\]\n]*\)[^"\]\n]*)\]/g, '["$1"]');
+
+    // Fix 3: Quote unquoted parentheses in edge labels if possible (simplified)
+    // text in || or text in -- --
+    
+    return fixed;
+  };
+
   useEffect(() => {
     const renderDiagram = async () => {
       if (!code) return;
       try {
         setIsError(false);
-        // Clean up code: Remove potential markdown artifacts or ZWNJ characters that might break mermaid
-        let cleanCode = code
-          .replace(/```mermaid/g, '')
-          .replace(/```/g, '')
-          .trim();
-        
-        // Ensure flowchart TD if mistakenly graph TD (optional fix for older models)
-        if (cleanCode.startsWith('graph ')) {
-           cleanCode = cleanCode.replace('graph ', 'flowchart ');
-        }
+        const cleanCode = fixMermaidSyntax(code);
 
         mermaid.initialize({ 
           startOnLoad: false, 
@@ -238,19 +253,14 @@ You are a dedicated Technical Assistant for the project described above.
         }
       }
 
-      // --- CRITICAL FIX: Include full source code in the context for high-level tasks ---
-      const fullSourceContext = sourceFiles.map(f => `\n--- SOURCE FILE: ${f.path} ---\n${f.content}`).join('\n');
-      const globalContextWithSource = `Project File Tree:\n${fileTree}\n\nConfiguration Files:\n${configContents.join('')}\n\nSource Code Content:\n${fullSourceContext}`;
-      // --------------------------------------------------------------------------------
-
       // Calculate total steps based on selected levels
       let totalSteps = 0;
-      if (docLevels.root) totalSteps += 1;
-      if (docLevels.arch) totalSteps += 1;
-      if (docLevels.ops) totalSteps += 1;
-      if (docLevels.sequence) totalSteps += 1; // New Step
-      if (docLevels.code) totalSteps += sourceFiles.length;
-
+      if (docLevels.code) totalSteps += sourceFiles.length; // Step 1: Code Analysis
+      if (docLevels.arch) totalSteps += 1; // Step 2: Arch
+      if (docLevels.sequence) totalSteps += 1; // Step 3: Sequence
+      if (docLevels.ops) totalSteps += 1; // Step 4: Ops
+      if (docLevels.root) totalSteps += 1; // Step 5: Root (Summary)
+      
       let completedSteps = 0;
       const updateProgress = () => {
         completedSteps++;
@@ -258,72 +268,111 @@ You are a dedicated Technical Assistant for the project described above.
         setProgress(percent);
       };
 
-      let documentation = `# مستندات جامع پروژه\n\nتولید شده توسط RepoDocs AI\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+      // --- Variables to hold parts of documentation ---
+      // We use these to assemble the final doc in the correct order (Root -> Arch -> Seq -> Ops -> Code)
+      // even if we generate them in a different order (Code Analysis first).
+      let partRoot = '';
+      let partArch = '';
+      let partOps = '';
+      let partSeq = '';
+      let partCode = '';
+
+      const assembleDoc = () => {
+          let doc = `# مستندات جامع پروژه\n\nتولید شده توسط RepoDocs AI\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+          if (partRoot) doc += `${partRoot}\n\n---\n\n`;
+          if (partArch) doc += `## 🏗 معماری سیستم\n\n${partArch}\n\n---\n\n`;
+          if (partSeq) doc += `## 🔄 نمودار توالی فرآیندها (Sequence Diagram)\n\n${partSeq}\n\n---\n\n`;
+          if (partOps) doc += `## 🚀 راهنمای عملیاتی و دیپلوی\n\n${partOps}\n\n---\n\n`;
+          if (partCode) doc += `## 💻 مستندات کدها\n\n${partCode}`;
+          return doc;
+      };
+
+      // --- Prepare Initial Context ---
+      const fullSourceContext = sourceFiles.map(f => `\n--- SOURCE FILE: ${f.path} ---\n${f.content}`).join('\n');
       
-      const globalContext = `Here is the file tree of the project:\n${fileTree}\n\nAnd here are the configuration files:\n${configContents.join('')}`;
+      // Store code analysis results here to improve context for later steps
+      let analysisSummaries = '';
 
-      // --- LEVEL 1: ROOT Documentation ---
-      if (docLevels.root) {
-        addLog('سطح ۱: تولید مستندات ریشه (README)...', 'info');
-        // We keep the lighter context for README to avoid unnecessary token usage, unless requested otherwise
-        const readmeContent = await generateCompletion(config, globalContext, PROMPT_LEVEL_1_ROOT);
-        documentation += `${readmeContent}\n\n---\n\n`;
-        setGeneratedDoc(documentation);
-        updateProgress();
-      }
-
-      // --- LEVEL 3: Architecture Documentation ---
-      if (docLevels.arch) {
-        addLog('سطح ۳: تحلیل معماری و سیستم...', 'info');
-        // Fix: Use globalContextWithSource to include actual code
-        const archPrompt = `${globalContextWithSource}\n\nدستور اصلی: با توجه به کدهای بالا، یک دیاگرام معماری دقیق (Architecture Diagram) با فرمت Mermaid (flowchart TD) تولید کن که نشان دهد کامپوننت‌های کد (مثل توابع، کلاس‌ها و APIها) چگونه با هم در ارتباط هستند. حتما متن‌ها را در کوتیشن "..." بگذار.`;
-        const archContent = await generateCompletion(config, archPrompt, PROMPT_LEVEL_3_ARCH);
-        documentation += `## 🏗 معماری سیستم\n\n${archContent}\n\n---\n\n`;
-        setGeneratedDoc(documentation);
-        updateProgress();
-      }
-
-      // --- LEVEL 4: Operational Documentation ---
-      if (docLevels.ops) {
-        addLog('سطح ۴: تولید مستندات عملیاتی (DevOps)...', 'info');
-        const opsPrompt = `Config Files:\n${configContents.join('\n')}\n\n(No source code provided, infer from configs)`;
-        const opsContent = await generateCompletion(config, opsPrompt, PROMPT_LEVEL_4_OPS);
-        documentation += `## 🚀 راهنمای عملیاتی و دیپلوی\n\n${opsContent}\n\n---\n\n`;
-        setGeneratedDoc(documentation);
-        updateProgress();
-      }
-
-      // --- LEVEL 5: Sequence Diagram (NEW) ---
-      if (docLevels.sequence) {
-        addLog('سطح ۵: ترسیم نمودار توالی (Sequence Diagram)...', 'info');
-        // Fix: Use globalContextWithSource to include actual code for accurate logic tracing
-        const sequenceContext = `${globalContextWithSource}\n\nدستور اصلی: بر اساس منطق موجود در کدها (Source Code Content)، سناریوی اصلی برنامه (مثلاً نحوه پردازش یک درخواست توسط کاربر) را استخراج کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است و متن‌ها باید در کوتیشن باشند.`;
-        const seqContent = await generateCompletion(config, sequenceContext, PROMPT_LEVEL_5_SEQUENCE);
-        documentation += `## 🔄 نمودار توالی فرآیندها (Sequence Diagram)\n\n${seqContent}\n\n---\n\n`;
-        setGeneratedDoc(documentation);
-        updateProgress();
-      }
-
-      // --- LEVEL 2: Code Documentation ---
+      // =========================================================================================
+      // PHASE 1: Deep Code Analysis (Level 2)
+      // We run this FIRST to understand the code before drawing diagrams.
+      // =========================================================================================
       if (docLevels.code) {
-        addLog(`سطح ۲: تحلیل جزئی ${sourceFiles.length} فایل کد...`, 'info');
-        documentation += `## 💻 مستندات کدها\n\n`;
+        addLog(`سطح ۲: تحلیل عمیق ${sourceFiles.length} فایل کد (جهت درک سیستم)...`, 'info');
         
         for (const file of sourceFiles) {
           addLog(`در حال تحلیل ${file.path}...`, 'info');
           const filePrompt = `File Path: ${file.path}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
           const fileAnalysis = await generateCompletion(config, filePrompt, PROMPT_LEVEL_2_CODE);
           
-          // Use <details> for cleaner UI in Markdown
-          documentation += `<details>\n<summary><strong>📄 ${file.path}</strong></summary>\n\n${fileAnalysis}\n\n</details>\n\n`;
-          setGeneratedDoc(documentation);
+          // Add to doc part
+          partCode += `<details>\n<summary><strong>📄 ${file.path}</strong></summary>\n\n${fileAnalysis}\n\n</details>\n\n`;
+          
+          // Add to context for next steps (Valuable!)
+          analysisSummaries += `\n>>> Analysis Summary for ${file.path}:\n${fileAnalysis}\n`;
+
+          setGeneratedDoc(assembleDoc());
           updateProgress(); 
         }
       }
 
+      // Create enriched context with analysis results
+      const globalContextWithAnalysis = `Project File Tree:\n${fileTree}\n\nConfiguration Files:\n${configContents.join('')}\n\nSource Code Content:\n${fullSourceContext}\n\n${analysisSummaries ? `Expert Code Analysis Insights:\n${analysisSummaries}` : ''}`;
+
+
+      // =========================================================================================
+      // PHASE 2: Architecture (Level 3)
+      // Now uses the enriched context
+      // =========================================================================================
+      if (docLevels.arch) {
+        addLog('سطح ۳: تحلیل معماری و سیستم (بر اساس تحلیل کدها)...', 'info');
+        const archPrompt = `${globalContextWithAnalysis}\n\nدستور اصلی: با توجه به کدها و تحلیل‌های انجام شده، یک دیاگرام معماری دقیق (Architecture Diagram) با فرمت Mermaid (flowchart TD) تولید کن که نشان دهد کامپوننت‌های کد (مثل توابع، کلاس‌ها و APIها) چگونه با هم در ارتباط هستند. حتما متن‌ها را در کوتیشن "..." بگذار.`;
+        const archContent = await generateCompletion(config, archPrompt, PROMPT_LEVEL_3_ARCH);
+        partArch = archContent;
+        setGeneratedDoc(assembleDoc());
+        updateProgress();
+      }
+
+      // =========================================================================================
+      // PHASE 3: Sequence Diagram (Level 5)
+      // Now uses the enriched context
+      // =========================================================================================
+      if (docLevels.sequence) {
+        addLog('سطح ۵: ترسیم نمودار توالی (Sequence Diagram)...', 'info');
+        const sequenceContext = `${globalContextWithAnalysis}\n\nدستور اصلی: بر اساس منطق موجود در کدها و تحلیل‌های انجام شده، سناریوی اصلی برنامه (مثلاً نحوه پردازش یک درخواست توسط کاربر) را استخراج کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است و متن‌ها باید در کوتیشن باشند.`;
+        const seqContent = await generateCompletion(config, sequenceContext, PROMPT_LEVEL_5_SEQUENCE);
+        partSeq = seqContent;
+        setGeneratedDoc(assembleDoc());
+        updateProgress();
+      }
+
+      // =========================================================================================
+      // PHASE 4: Operational (Level 4)
+      // =========================================================================================
+      if (docLevels.ops) {
+        addLog('سطح ۴: تولید مستندات عملیاتی (DevOps)...', 'info');
+        const opsPrompt = `Config Files:\n${configContents.join('\n')}\n\n(No source code provided, infer from configs)`;
+        const opsContent = await generateCompletion(config, opsPrompt, PROMPT_LEVEL_4_OPS);
+        partOps = opsContent;
+        setGeneratedDoc(assembleDoc());
+        updateProgress();
+      }
+
+      // =========================================================================================
+      // PHASE 5: Root Documentation (Level 1)
+      // Done last to utilize full understanding for the "Introduction"
+      // =========================================================================================
+      if (docLevels.root) {
+        addLog('سطح ۱: تولید مستندات ریشه (README)...', 'info');
+        const readmeContent = await generateCompletion(config, globalContextWithAnalysis, PROMPT_LEVEL_1_ROOT);
+        partRoot = readmeContent;
+        setGeneratedDoc(assembleDoc());
+        updateProgress();
+      }
+
       addLog('تولید تمامی سطوح مستندات با موفقیت انجام شد!', 'success');
       setProgress(100);
-      updateChatContext(documentation);
+      updateChatContext(assembleDoc());
 
     } catch (error: any) {
       addLog(`خطا: ${error.message}`, 'error');
@@ -459,11 +508,11 @@ You are a dedicated Technical Assistant for the project described above.
           </h2>
           <div className="space-y-3">
              {[
-               { id: 'root', label: 'ریشه (README)', desc: 'معرفی و نصب', color: 'blue' },
+               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل', color: 'slate' },
                { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', color: 'indigo' },
                { id: 'sequence', label: 'نمودار توالی', desc: 'سناریوی اصلی', color: 'purple' },
                { id: 'ops', label: 'عملیاتی (DevOps)', desc: 'دیپلوی و کانفیگ', color: 'pink' },
-               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل', color: 'slate' }
+               { id: 'root', label: 'ریشه (README)', desc: 'معرفی و نصب', color: 'blue' }
              ].map((level) => (
                 <label key={level.id} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all duration-300 group hover:shadow-md ${
                   // @ts-ignore

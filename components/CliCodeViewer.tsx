@@ -34,7 +34,10 @@ import ollama from 'ollama';
 // --- Configuration ---
 const CONFIG = {
   model: 'qwen2.5-coder:14b', // پیش‌فرض: بهترین مدل برای کد
-  ignoredDirs: new Set(['node_modules', '.git', '.vscode', 'dist', 'build', 'coverage', '.next', 'target']),
+  ignoredDirs: new Set([
+    'node_modules', '.git', '.vscode', 'dist', 'build', 'coverage', '.next', 'target',
+    'venv', '.venv', 'env', '.env', '__pycache__', 'Lib', 'site-packages', 'Scripts', 'Include'
+  ]),
   ignoredExts: new Set(['.png', '.jpg', '.jpeg', '.lock', '.exe', '.bin', '.gz', '.zip', '.pdf']),
   configFiles: new Set([
     'package.json', 'tsconfig.json', 'Dockerfile', 'requirements.txt', 
@@ -146,7 +149,20 @@ async function main() {
 
     // Phase 1: Architecture
     console.log('\\n🧠 فاز ۱: تحلیل معماری و تکنولوژی‌ها...');
-    const globalPrompt = \`File Tree:\\n\${fileTree}\\n\\nConfig Files:\\n\${configContents.join('')}\`;
+    
+    // Read source content for better context (Prevents hallucinations)
+    const sourceContextPromises = sourceFiles.map(async (f) => {
+      try {
+        const stats = await fs.stat(f);
+        if (stats.size > CONFIG.maxFileSize) return '';
+        const content = await fs.readFile(f, 'utf-8');
+        return \`\\n--- SOURCE FILE: \${path.relative(absPath, f)} ---\\n\${content}\`;
+      } catch (e) { return ''; }
+    });
+    const fullSourceContext = (await Promise.all(sourceContextPromises)).join('\\n');
+
+    const globalPrompt = \`File Tree:\\n\${fileTree}\\n\\nConfig Files:\\n\${configContents.join('')}\\n\\nSource Code Content:\\n\${fullSourceContext}\`;
+    
     const archDoc = await queryLLM(globalPrompt, PROMPTS.global);
     finalDoc += \`## نمای کلی معماری\\n\\n\${archDoc}\\n\\n---\\n\\n## تحلیل فایل‌ها\\n\\n\`;
     console.log('✅ تحلیل معماری انجام شد.');
