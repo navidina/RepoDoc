@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database } from 'lucide-react';
+import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Server, LayoutTemplate, GitMerge } from 'lucide-react';
 // @ts-ignore
 import ReactMarkdown from 'https://esm.sh/react-markdown@9.0.1?deps=react@19.2.3';
 // @ts-ignore
 import remarkGfm from 'https://esm.sh/remark-gfm@4.0.0';
 import { OllamaConfig, ProcessingLog, ChatMessage } from '../types';
-import { IGNORED_DIRS, IGNORED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_SYSTEM_CODE, PROMPT_SYSTEM_GLOBAL } from '../utils/constants';
+import { IGNORED_DIRS, IGNORED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE } from '../utils/constants';
 import { generateCompletion, checkOllamaConnection, sendChatRequest } from '../services/ollamaService';
 
 const BrowserGenerator: React.FC = () => {
@@ -19,6 +19,15 @@ const BrowserGenerator: React.FC = () => {
   });
   const [files, setFiles] = useState<FileList | null>(null);
   
+  // --- Documentation Levels State ---
+  const [docLevels, setDocLevels] = useState({
+    root: true,    // Level 1
+    code: true,    // Level 2
+    arch: true,    // Level 3
+    ops: false,    // Level 4
+    sequence: true // Level 5 (New)
+  });
+
   // --- Documentation State ---
   const [generatedDoc, setGeneratedDoc] = useState<string>('');
   const [viewMode, setViewMode] = useState<'raw' | 'preview'>('preview'); 
@@ -47,7 +56,6 @@ const BrowserGenerator: React.FC = () => {
   }, [chatMessages, activeTab]);
 
   const updateChatContext = (docContent: string) => {
-    // Strict prompt engineering to force RAG behavior
     const contextSystemMessage = `*** PROJECT CONTEXT START ***
 ${docContent}
 *** PROJECT CONTEXT END ***
@@ -147,7 +155,14 @@ You are a dedicated Technical Assistant for the project described above.
         }
       }
 
-      const totalSteps = 1 + sourceFiles.length;
+      // Calculate total steps based on selected levels
+      let totalSteps = 0;
+      if (docLevels.root) totalSteps += 1;
+      if (docLevels.arch) totalSteps += 1;
+      if (docLevels.ops) totalSteps += 1;
+      if (docLevels.sequence) totalSteps += 1; // New Step
+      if (docLevels.code) totalSteps += sourceFiles.length;
+
       let completedSteps = 0;
       const updateProgress = () => {
         completedSteps++;
@@ -155,30 +170,67 @@ You are a dedicated Technical Assistant for the project described above.
         setProgress(percent);
       };
 
-      let documentation = `# مستندات مخزن کد\n\nتولید شده توسط RepoDocs AI با مدل ${config.model}\n\n`;
-
-      addLog('فاز ۱: تحلیل معماری پروژه...', 'info');
-      const globalPrompt = `Here is the file tree of the project:\n${fileTree}\n\nAnd here are the configuration files:\n${configContents.join('')}`;
-      const globalResponse = await generateCompletion(config, globalPrompt, PROMPT_SYSTEM_GLOBAL);
+      let documentation = `# مستندات جامع پروژه\n\nتولید شده توسط RepoDocs AI\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
       
-      documentation += `## معماری و استک فنی\n\n${globalResponse}\n\n---\n\n`;
-      setGeneratedDoc(documentation);
-      updateProgress(); 
+      const globalContext = `Here is the file tree of the project:\n${fileTree}\n\nAnd here are the configuration files:\n${configContents.join('')}`;
 
-      addLog(`فاز ۲: تحلیل ${sourceFiles.length} فایل کد منبع...`, 'info');
-      documentation += `## تحلیل کدها\n\n`;
-
-      for (const file of sourceFiles) {
-        addLog(`در حال تحلیل ${file.path}...`, 'info');
-        const filePrompt = `File Path: ${file.path}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
-        const fileAnalysis = await generateCompletion(config, filePrompt, PROMPT_SYSTEM_CODE);
-        
-        documentation += `### ${file.path}\n\n${fileAnalysis}\n\n`;
+      // --- LEVEL 1: ROOT Documentation ---
+      if (docLevels.root) {
+        addLog('سطح ۱: تولید مستندات ریشه (README)...', 'info');
+        const readmeContent = await generateCompletion(config, globalContext, PROMPT_LEVEL_1_ROOT);
+        documentation += `${readmeContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
-        updateProgress(); 
+        updateProgress();
       }
 
-      addLog('تولید مستندات با موفقیت انجام شد!', 'success');
+      // --- LEVEL 3: Architecture Documentation ---
+      if (docLevels.arch) {
+        addLog('سطح ۳: تحلیل معماری و سیستم...', 'info');
+        const archContent = await generateCompletion(config, globalContext, PROMPT_LEVEL_3_ARCH);
+        documentation += `## 🏗 معماری سیستم\n\n${archContent}\n\n---\n\n`;
+        setGeneratedDoc(documentation);
+        updateProgress();
+      }
+
+      // --- LEVEL 4: Operational Documentation ---
+      if (docLevels.ops) {
+        addLog('سطح ۴: تولید مستندات عملیاتی (DevOps)...', 'info');
+        const opsPrompt = `Config Files:\n${configContents.join('\n')}\n\n(No source code provided, infer from configs)`;
+        const opsContent = await generateCompletion(config, opsPrompt, PROMPT_LEVEL_4_OPS);
+        documentation += `## 🚀 راهنمای عملیاتی و دیپلوی\n\n${opsContent}\n\n---\n\n`;
+        setGeneratedDoc(documentation);
+        updateProgress();
+      }
+
+      // --- LEVEL 5: Sequence Diagram (NEW) ---
+      if (docLevels.sequence) {
+        addLog('سطح ۵: ترسیم نمودار توالی (Sequence Diagram)...', 'info');
+        // We pass global context + a hint to look at source files structure implicitly
+        const sequenceContext = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nPlease infer the main application flow based on file names and typical patterns.`;
+        const seqContent = await generateCompletion(config, sequenceContext, PROMPT_LEVEL_5_SEQUENCE);
+        documentation += `## 🔄 نمودار توالی فرآیندها (Sequence Diagram)\n\n${seqContent}\n\n---\n\n`;
+        setGeneratedDoc(documentation);
+        updateProgress();
+      }
+
+      // --- LEVEL 2: Code Documentation ---
+      if (docLevels.code) {
+        addLog(`سطح ۲: تحلیل جزئی ${sourceFiles.length} فایل کد...`, 'info');
+        documentation += `## 💻 مستندات کدها\n\n`;
+        
+        for (const file of sourceFiles) {
+          addLog(`در حال تحلیل ${file.path}...`, 'info');
+          const filePrompt = `File Path: ${file.path}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
+          const fileAnalysis = await generateCompletion(config, filePrompt, PROMPT_LEVEL_2_CODE);
+          
+          // Use <details> for cleaner UI in Markdown
+          documentation += `<details>\n<summary><strong>📄 ${file.path}</strong></summary>\n\n${fileAnalysis}\n\n</details>\n\n`;
+          setGeneratedDoc(documentation);
+          updateProgress(); 
+        }
+      }
+
+      addLog('تولید تمامی سطوح مستندات با موفقیت انجام شد!', 'success');
       setProgress(100);
       updateChatContext(documentation);
 
@@ -200,8 +252,6 @@ You are a dedicated Technical Assistant for the project described above.
     setIsChatLoading(true);
 
     try {
-      // Logic to reinforce context:
-      // We append a hidden instruction to the message sent to the API, but keep UI clean.
       let messagesToSend = [...chatMessages, newUserMessage];
       
       if (hasContext) {
@@ -242,23 +292,44 @@ You are a dedicated Technical Assistant for the project described above.
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-blue-300 my-4" {...props} />,
-        h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-white my-3" {...props} />,
-        h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold text-blue-200 my-2" {...props} />,
+        h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-blue-300 my-4 border-b border-gray-700 pb-2" {...props} />,
+        h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-white mt-8 mb-4 flex items-center gap-2" {...props} />,
+        h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold text-blue-200 mt-6 mb-2" {...props} />,
         p: ({node, ...props}: any) => <p className="text-gray-300 leading-7 mb-3 text-justify" {...props} />,
         ul: ({node, ...props}: any) => <ul className="list-disc list-outside mr-6 space-y-1 mb-3 text-gray-300" {...props} />,
         ol: ({node, ...props}: any) => <ol className="list-decimal list-outside mr-6 space-y-1 mb-3 text-gray-300" {...props} />,
         table: ({node, ...props}: any) => <div className="overflow-x-auto my-4 border border-gray-700 rounded"><table className="w-full text-right" {...props} /></div>,
         thead: ({node, ...props}: any) => <thead className="bg-gray-800 text-gray-100" {...props} />,
-        th: ({node, ...props}: any) => <th className="px-4 py-2 border-b border-gray-600" {...props} />,
+        th: ({node, ...props}: any) => <th className="px-4 py-2 border-b border-gray-600 font-bold text-blue-300" {...props} />,
         td: ({node, ...props}: any) => <td className="px-4 py-2 border-b border-gray-700/50" {...props} />,
         code: ({node, inline, className, children, ...props}: any) => {
+          const match = /language-(\w+)/.exec(className || '');
+          const isMermaid = match && match[1] === 'mermaid';
+          
+          if (isMermaid) {
+             return (
+               <div className="bg-white p-4 rounded text-gray-900 overflow-x-auto text-center my-4 border-4 border-gray-200">
+                 <div className="font-mono text-xs text-gray-500 mb-2 border-b pb-1 flex justify-between px-2">
+                    <span>Mermaid Diagram</span>
+                    <span className="text-gray-400">Preview</span>
+                 </div>
+                 <pre className="whitespace-pre font-mono text-xs">{children}</pre>
+                 <div className="text-[10px] text-gray-400 mt-2 italic">
+                   (این کد در GitHub یا ابزارهای Markdown به نمودار گرافیکی تبدیل می‌شود)
+                 </div>
+               </div>
+             );
+          }
+
           return inline ? (
             <code className="bg-gray-800 text-pink-300 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-700" {...props}>{children}</code>
           ) : (
             <div className="my-3 dir-ltr"><code className="block bg-[#1e1e1e] p-3 rounded-lg overflow-x-auto text-sm font-mono text-gray-300 border border-gray-700" {...props}>{children}</code></div>
           )
-        }
+        },
+        // Custom summary/details styling
+        details: ({node, ...props}: any) => <details className="bg-gray-800/50 border border-gray-700 rounded-lg mb-2 overflow-hidden open:bg-gray-800 transition-all" {...props} />,
+        summary: ({node, ...props}: any) => <summary className="cursor-pointer p-3 font-mono text-sm hover:bg-gray-700/50 select-none text-blue-300 outline-none" {...props} />
       }}
     >
       {content}
@@ -300,47 +371,75 @@ You are a dedicated Technical Assistant for the project described above.
 
         <div>
           <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Layers className="w-5 h-5 text-purple-400" />
+            ۲. سطوح مستندسازی
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.root ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
+                <input type="checkbox" checked={docLevels.root} onChange={e => setDocLevels({...docLevels, root: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-white">ریشه (README)</span>
+                  <span className="text-[10px] text-gray-400">معرفی و نصب</span>
+                </div>
+             </label>
+             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.arch ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
+                <input type="checkbox" checked={docLevels.arch} onChange={e => setDocLevels({...docLevels, arch: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-white">معماری</span>
+                  <span className="text-[10px] text-gray-400">دیاگرام و پترن‌ها</span>
+                </div>
+             </label>
+             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.sequence ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
+                <input type="checkbox" checked={docLevels.sequence} onChange={e => setDocLevels({...docLevels, sequence: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-white">نمودار توالی</span>
+                  <span className="text-[10px] text-gray-400">مخصوص مدیر محصول</span>
+                </div>
+             </label>
+             <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.ops ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
+                <input type="checkbox" checked={docLevels.ops} onChange={e => setDocLevels({...docLevels, ops: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-white">عملیاتی (DevOps)</span>
+                  <span className="text-[10px] text-gray-400">دیپلوی و کانفیگ</span>
+                </div>
+             </label>
+             <label className={`col-span-2 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${docLevels.code ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-900 border-gray-700 hover:border-gray-600'}`}>
+                <input type="checkbox" checked={docLevels.code} onChange={e => setDocLevels({...docLevels, code: e.target.checked})} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-white">سطح کد (تحلیل کامل)</span>
+                  <span className="text-[10px] text-gray-400">تحلیل فایل به فایل (زمان‌بر)</span>
+                </div>
+             </label>
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-400" />
-            ۲. تنظیمات مدل زبانی
+            ۳. تنظیمات مدل زبانی
           </h2>
           <div className="space-y-3">
-             <div>
-              <label className="block text-xs text-gray-400 mb-1">آدرس Ollama</label>
-              <input 
+             <input 
                 type="text" 
                 value={config.baseUrl} 
                 onChange={e => setConfig({...config, baseUrl: e.target.value})}
-                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm dir-ltr text-left"
-              />
-             </div>
-             <div>
-              <label className="block text-xs text-gray-400 mb-1">نام مدل</label>
-              <input 
+                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm dir-ltr text-left placeholder-gray-500"
+                placeholder="URL (http://localhost:11434)"
+             />
+             <input 
                 type="text" 
                 list="model-suggestions"
                 value={config.model} 
                 onChange={e => setConfig({...config, model: e.target.value})}
-                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm dir-ltr text-left"
-                placeholder="مثال: qwen2.5-coder:14b"
-              />
-              <datalist id="model-suggestions">
+                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm dir-ltr text-left placeholder-gray-500"
+                placeholder="Model Name (e.g., qwen2.5-coder:14b)"
+             />
+             <datalist id="model-suggestions">
                 <option value="qwen2.5-coder:14b" />
                 <option value="qwen2.5-coder:7b" />
                 <option value="llama3.1" />
                 <option value="gemma2:9b" />
               </datalist>
-             </div>
-             
-             <div className="bg-gray-900/50 p-3 rounded border border-gray-700 text-xs text-gray-400 leading-relaxed">
-                <div className="flex items-center gap-2 mb-1 text-blue-300 font-bold">
-                  <Info className="w-3 h-3" />
-                  راهنمای انتخاب مدل:
-                </div>
-                <ul className="list-disc list-inside space-y-1 pr-2">
-                  <li><span className="text-white">qwen2.5-coder</span>: بهترین درک از منطق کد (پیشنهادی برای تحلیل دقیق).</li>
-                  <li><span className="text-white">llama3.1 / gemma2</span>: نثر فارسی بسیار روان‌تر، اما درک فنی متوسط.</li>
-                </ul>
-             </div>
           </div>
         </div>
 
@@ -375,8 +474,8 @@ You are a dedicated Technical Assistant for the project described above.
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-gray-900 rounded-lg p-4 border border-gray-700 font-mono text-xs">
-          <div className="text-gray-400 mb-2 font-bold">گزارش پردازش:</div>
+        <div className="flex-1 overflow-y-auto bg-gray-900 rounded-lg p-4 border border-gray-700 font-mono text-xs max-h-48">
+          <div className="text-gray-400 mb-2 font-bold sticky top-0 bg-gray-900 pb-2 border-b border-gray-800">گزارش پردازش:</div>
           {logs.length === 0 && <span className="text-gray-600 italic">لاگ‌ها اینجا نمایش داده می‌شوند...</span>}
           {logs.map((log, i) => (
             <div key={i} className={`mb-1 ${
