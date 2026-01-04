@@ -14,20 +14,46 @@ import { generateCompletion, checkOllamaConnection, sendChatRequest } from '../s
 const MermaidRenderer = ({ code }: { code: string }) => {
   const [svg, setSvg] = useState('');
   const [isError, setIsError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     const renderDiagram = async () => {
       if (!code) return;
       try {
         setIsError(false);
-        // Initialize with a light theme matching the dashboard
-        mermaid.initialize({ startOnLoad: false, theme: 'base', themeVariables: { fontFamily: 'Vazirmatn', primaryColor: '#e2e8f0', primaryTextColor: '#1e293b', lineColor: '#64748b' }, securityLevel: 'loose' });
+        // Clean up code: Remove potential markdown artifacts or ZWNJ characters that might break mermaid
+        let cleanCode = code
+          .replace(/```mermaid/g, '')
+          .replace(/```/g, '')
+          .trim();
+        
+        // Ensure flowchart TD if mistakenly graph TD (optional fix for older models)
+        if (cleanCode.startsWith('graph ')) {
+           cleanCode = cleanCode.replace('graph ', 'flowchart ');
+        }
+
+        mermaid.initialize({ 
+          startOnLoad: false, 
+          theme: 'base', 
+          themeVariables: { 
+            fontFamily: 'Vazirmatn', 
+            primaryColor: '#e2e8f0', 
+            primaryTextColor: '#1e293b', 
+            lineColor: '#64748b',
+            fontSize: '14px'
+          }, 
+          securityLevel: 'loose',
+          flowchart: { htmlLabels: true }
+        });
+
         const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
-        const { svg } = await mermaid.render(id, code);
+        // render returns an object { svg: string }
+        const { svg } = await mermaid.render(id, cleanCode);
         setSvg(svg);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Mermaid rendering failed:', error);
         setIsError(true);
+        setErrorMsg(error.message || 'Unknown syntax error');
       }
     };
 
@@ -37,8 +63,11 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   if (isError) {
     return (
       <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-left dir-ltr my-4 shadow-sm">
-        <p className="text-red-600 text-xs font-mono mb-2 font-bold">Mermaid Syntax Error</p>
-        <pre className="text-red-800 text-xs font-mono overflow-auto whitespace-pre-wrap bg-red-100/50 p-2 rounded">{code}</pre>
+        <p className="text-red-600 text-xs font-mono mb-2 font-bold flex items-center gap-2">
+          <AlertCircle className="w-3 h-3" /> Mermaid Syntax Error
+        </p>
+        <div className="text-red-500 text-[10px] mb-2 font-mono">{errorMsg}</div>
+        <pre className="text-red-800 text-xs font-mono overflow-auto whitespace-pre-wrap bg-red-100/50 p-2 rounded max-h-40">{code}</pre>
       </div>
     );
   }
@@ -240,7 +269,7 @@ You are a dedicated Technical Assistant for the project described above.
       // --- LEVEL 3: Architecture Documentation ---
       if (docLevels.arch) {
         addLog('سطح ۳: تحلیل معماری و سیستم...', 'info');
-        const archPrompt = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: یک دیاگرام معماری (Architecture Diagram) با فرمت Mermaid (graph TD) تولید کن که کامپوننت‌های اصلی را نشان دهد.`;
+        const archPrompt = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: یک دیاگرام معماری (Architecture Diagram) با فرمت Mermaid (flowchart TD) تولید کن که کامپوننت‌های اصلی را نشان دهد. حتما متن‌ها را در کوتیشن "..." بگذار.`;
         const archContent = await generateCompletion(config, archPrompt, PROMPT_LEVEL_3_ARCH);
         documentation += `## 🏗 معماری سیستم\n\n${archContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
@@ -261,7 +290,7 @@ You are a dedicated Technical Assistant for the project described above.
       if (docLevels.sequence) {
         addLog('سطح ۵: ترسیم نمودار توالی (Sequence Diagram)...', 'info');
         // Reinforced user-side prompt to ensure Persian language and Mermaid format
-        const sequenceContext = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: بر اساس فایل‌های بالا، یک سناریوی اصلی (مثل لاگین، پردازش، یا گزارش) انتخاب کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است.`;
+        const sequenceContext = `Project Structure:\n${fileTree}\n\nConfigs:\n${configContents.join('\n')}\n\nدستور اصلی: بر اساس فایل‌های بالا، یک سناریوی اصلی (مثل لاگین، پردازش، یا گزارش) انتخاب کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است و متن‌ها باید در کوتیشن باشند.`;
         const seqContent = await generateCompletion(config, sequenceContext, PROMPT_LEVEL_5_SEQUENCE);
         documentation += `## 🔄 نمودار توالی فرآیندها (Sequence Diagram)\n\n${seqContent}\n\n---\n\n`;
         setGeneratedDoc(documentation);
