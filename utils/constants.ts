@@ -18,7 +18,9 @@ export const IGNORED_DIRS = new Set([
 ]);
 
 export const ALLOWED_EXTENSIONS = new Set([
-  '.js', '.jsx', '.ts', '.tsx', '.py', '.html', '.css', '.json', '.md', '.yml', '.yaml', '.txt', '.dockerfile', '.sh', '.bat', '.java', '.c', '.cpp', '.go', '.rs'
+  '.js', '.jsx', '.ts', '.tsx', '.py', '.html', '.css', '.json', '.md', '.yml', '.yaml', 
+  '.txt', '.dockerfile', '.sh', '.bat', '.java', '.c', '.cpp', '.go', '.rs', 
+  '.sql', '.prisma', '.tf', '.tfvars', '.conf'
 ]);
 
 export const LANGUAGE_MAP: Record<string, string> = {
@@ -41,125 +43,166 @@ export const LANGUAGE_MAP: Record<string, string> = {
   '.cpp': 'C++',
   '.go': 'Go',
   '.rs': 'Rust',
-  '.sql': 'SQL'
+  '.sql': 'SQL',
+  '.prisma': 'Prisma DB',
+  '.tf': 'Terraform',
+  '.tfvars': 'Terraform'
 };
 
 export const CONFIG_FILES = new Set([
   'package.json', 'tsconfig.json', 'Dockerfile', 'docker-compose.yml',
   'requirements.txt', 'Cargo.toml', 'go.mod', 'pom.xml', 'Gemfile',
-  'Makefile', 'README.md', 'vite.config.ts', 'vite.config.js', 'webpack.config.js'
+  'Makefile', 'README.md', 'vite.config.ts', 'vite.config.js', 'webpack.config.js',
+  'schema.prisma', 'main.tf'
 ]);
 
 export const DEFAULT_MODEL = 'qwen2.5-coder:14b';
 export const OLLAMA_DEFAULT_URL = 'http://localhost:11434';
 
 // --- Level 1: Root Documentation ---
-export const PROMPT_LEVEL_1_ROOT = `شما یک Technical Writer ارشد فارسی‌زبان هستید.
-وظیفه: تولید فایل README.md سطح ریشه برای مخزن کد.
+export const PROMPT_LEVEL_1_ROOT = `شما یک نویسنده فنی (Technical Writer) ارشد برای یک وبلاگ فارسی هستید.
+وظیفه: نوشتن یک فایل README.md جامع و حرفه‌ای برای پروژه بر اساس اطلاعات داده شده.
 
-قانون حیاتی (CRITICAL RULE):
-تمام توضیحات، متن‌ها و راهنماها باید **حتماً و اکیداً به زبان فارسی** نوشته شوند.
-اگر متنی را به انگلیسی بنویسی، امتیاز منفی می‌گیری.
-فقط نام متغیرها، کدها و اصطلاحات تخصصی (مثل Docker, API, Node.js) به انگلیسی باقی بمانند.
+ورودی:
+1. ساختار فایل‌ها (File Tree)
+2. محتوای فایل‌های کانفیگ
+3. خلاصه‌ی فنی ماژول‌ها
 
-ورودی: خلاصه‌ای از ماژول‌ها، فایل‌های تنظیمات و لیست فایل‌ها.
+قوانین بسیار مهم (CRITICAL RULES):
+1. **زبان خروجی:** خروجی باید **۱۰۰٪ فارسی** باشد. کلمات انگلیسی (مثل نام توابع یا کلاس‌ها) را ترجمه نکنید، اما توضیحات پیرامون آن‌ها باید کاملاً فارسی باشد.
+2. **بدون مقدمه انگلیسی:** به هیچ عنوان توضیحات انگلیسی در شروع یا پایان ننویسید.
+3. **فرمت:** از فرمت استاندارد Markdown استفاده کنید.
 
-خروجی باید فرمت Markdown استاندارد باشد و شامل:
-1. **عنوان و نشان‌ها:** نام پروژه.
-2. **معرفی پروژه:** یک پاراگراف جذاب و کامل به فارسی که هدف پروژه را توضیح دهد.
-3. **تحلیل تکنولوژی‌ها:** با توجه به آمار زبان‌های ارائه شده در کانتکست، توضیح دهید تمرکز اصلی پروژه روی چه زبانی است.
-4. **ویژگی‌های کلیدی:** لیست بولت‌وار قابلیت‌ها با توضیحات فارسی.
-5. **راهنمای نصب و اجرا:** دستورات Installation و Usage همراه با توضیحات قدم‌به‌قدم فارسی.
-6. **ساختار پروژه:** توضیح کوتاه فارسی درباره ساختار دایرکتوری‌ها.
+ساختار مورد انتظار:
+# [نام پروژه]
+(یک پاراگراف جذاب فارسی درباره اینکه این پروژه چیست و چه مشکلی را حل می‌کند)
 
-یادت باشد: مخاطب شما توسعه‌دهندگان ایرانی هستند، پس فارسی سلیس و روان بنویس.`;
+## 🛠 تکنولوژی‌های استفاده شده
+(لیست تکنولوژی‌های اصلی بر اساس فایل‌های کانفیگ)
+
+## 🚀 راهنمای نصب و اجرا
+(دستورات Installation و Usage با توضیحات فارسی)
+
+## 📂 ساختار پروژه
+(توضیح کوتاه فارسی درباره دایرکتوری‌های اصلی)
+
+## ✨ ویژگی‌های کلیدی
+(لیست ویژگی‌ها به فارسی)`;
 
 // --- Level 2: Code Documentation (Updated for Map-Reduce) ---
 export const PROMPT_LEVEL_2_CODE = `شما یک Senior Developer فارسی‌زبان هستید.
-وظیفه: مستندسازی فایل کد ارائه شده و ارائه خلاصه فنی.
+وظیفه: تحلیل فایل کد و تولید مستندات.
 
 قوانین حیاتی (CRITICAL RULES):
-1. **زبان:** خروجی باید **۱۰۰٪ فارسی** باشد (مگر نام‌های فنی).
-2. **حقایق (Facts):** لیستی از کلاس‌ها و توابع استخراج شده (Metadata) به شما داده شده است. فقط در مورد چیزهایی که واقعا وجود دارند صحبت کن.
-3. **ساختار خروجی:** دقیقا از فرمت زیر پیروی کن. بخش آخر (SUMMARY_FOR_CONTEXT) بسیار مهم است و نباید توضیحات فارسی داشته باشد، فقط فکت‌های فنی به انگلیسی.
+1. **خروجی نمایشی (بخش اول):** باید کاملاً **فارسی** باشد. جداول و توضیحات باید به زبان فارسی نوشته شوند.
+2. **خروجی سیستم (بخش دوم):** بعد از جداکننده، یک خلاصه فنی به انگلیسی بنویسید که فقط شامل حقایق (Facts) باشد.
 
-**هدف:**
-(یک پاراگراف کوتاه فارسی درباره اینکه این فایل چه می‌کند)
+الگوی پاسخ:
 
-**اجزای کلیدی:**
-(جدول مارک‌داون)
-| نام کامپوننت/تابع | عملکرد (به فارسی) | ورودی/خروجی |
-| --- | --- | --- |
-| نام | توضیح فارسی | ورودی/خروجی |
+**هدف فایل:**
+(توضیح فارسی کوتاه)
 
-**نکات فنی:**
-(لیست بولت‌وار از نکات مهم، هوک‌ها یا وابستگی‌ها به فارسی)
+**اجزای اصلی:**
+| نام (انگلیسی) | عملکرد (توضیح فارسی) |
+| --- | --- |
+| Name | Description in Persian |
+
+**نکات مهم:**
+- (نکته فارسی ۱)
+- (نکته فارسی ۲)
 
 ---
 **SUMMARY_FOR_CONTEXT**
-(Here, write a very concise technical summary in English approx 50 words. Mention key exported classes, functions, and the responsibility of this file. This will be used by the system architect for high-level diagrams. Do NOT use Persian here.)
+(Here write a technical summary in English. Focus ONLY on exports, key classes, and logic flow. Max 50 words. Do NOT use Persian here.)
 `;
 
 // --- Level 3: Architecture Documentation ---
-export const PROMPT_LEVEL_3_ARCH = `شما یک Software Architect هستید.
-وظیفه: تحلیل معماری سیستم و رسم نمودار.
+export const PROMPT_LEVEL_3_ARCH = `شما معمار نرم‌افزار هستید.
+وظیفه: نوشتن تحلیل معماری سیستم به زبان فارسی.
 
-ورودی: لیستی از فایل‌ها و خلاصه‌ی فنی (Technical Summary) هر فایل. نیازی به خواندن خط به خط کد نیست.
+ورودی: لیست فایل‌ها و خلاصه فنی آن‌ها.
 
-قوانین حیاتی (CRITICAL RULES) برای رسم دیاگرام:
-1. **زبان (LANGUAGE):** تمام متن‌های داخل گره‌ها، لیبل‌ها و توضیحات باید **فقط فارسی یا انگلیسی** باشند.
-2. **سینتکس:** حتماً از \`flowchart TD\` استفاده کنید.
-3. **کوت کردن اجباری (MANDATORY QUOTING):**
-   - هر متنی داخل \`[]\` یا \`()\` باید حتماً داخل دابل کوتیشن \`""\` باشد.
-   - صحیح: A["func()"] --> B["class"]
-
-خروجی باید شامل:
-1. **دیاگرام:** فقط کد Mermaid معتبر داخل بلوک \`\`\`mermaid.
-2. **توضیحات:** توضیحات متنی فارسی درباره معماری کلی سیستم.
+قوانین:
+1. **فقط فارسی:** تمام توضیحات باید به زبان فارسی سلیس باشد.
+2. **تمرکز:** روی الگوهای طراحی (Design Patterns)، جریان داده و نحوه تعامل ماژول‌ها تمرکز کنید.
+3. **بدون دیاگرام:** در این بخش دیاگرام نکشید، فقط متن توضیحی بنویسید.
 `;
 
 // --- Level 4: Operational Documentation ---
-export const PROMPT_LEVEL_4_OPS = `شما یک مهندس DevOps و SRE هستید.
-وظیفه: تولید مستندات عملیاتی (Runbook).
+export const PROMPT_LEVEL_4_OPS = `شما مهندس DevOps هستید.
+وظیفه: نوشتن راهنمای عملیاتی (Runbook).
 
-با توجه به فایل‌های کانفیگ (مثل Dockerfile, package.json):
-1. **پیش‌نیازهای محیطی:** چه ابزارهایی (Node, Python, Docker) نیاز است؟
-2. **متغیرهای محیطی (ENV):** لیستی از متغیرهای احتمالی مورد نیاز.
-3. **بیلد و دیپلوی:** دستورات برای بیلد گرفتن و اجرا در پروداکشن.
-4. **عیب‌یابی (Troubleshooting):** مشکلات رایج احتمالی.
+ورودی: فایل‌های کانفیگ (Dockerfile, package.json, etc).
 
-نکته: توضیحات کاملا فارسی باشد.`;
+قوانین:
+1. **زبان فارسی:** تمام دستورالعمل‌ها باید فارسی باشد.
+2. **محتوا:** پیش‌نیازها، متغیرهای محیطی (ENV)، نحوه بیلد و دیپلوی.
+`;
 
 // --- Level 5: Sequence Diagram (Strict Mode) ---
-export const PROMPT_LEVEL_5_SEQUENCE = `شما متخصص رسم نمودار Sequence Diagram هستید.
-هدف: ترسیم سناریوی اصلی برنامه به زبان فارسی.
+export const PROMPT_LEVEL_5_SEQUENCE = `You are a Diagram Generator.
+Task: Generate a MermaidJS Sequence Diagram based on the provided project summary.
 
-ورودی: خلاصه‌ی عملکرد فایل‌ها (Map-Reduce Summaries).
+CRITICAL RULES:
+1. Output **ONLY** the valid Mermaid code block.
+2. Start with \`\`\`mermaid and end with \`\`\`.
+3. Do **NOT** write any introduction, explanation, or summary text.
+4. Use "sequenceDiagram".
+5. Use Persian labels for messages if possible, inside double quotes.
 
-قوانین بسیار مهم (VERY IMPORTANT):
-1. **زبان (LANGUAGE):** فارسی یا انگلیسی.
-2. **فقط** از سینتکس \`sequenceDiagram\` استفاده کنید.
-3. **کوت کردن (Quoting):** تمام نام‌ها و پیام‌ها داخل \`""\`.
-
-الگوی صحیح:
+Example:
 \`\`\`mermaid
 sequenceDiagram
-    participant U as "کاربر"
-    participant S as "سیستم"
-    U->>S: "ارسال درخواست ورود"
-    S-->>U: "تایید اعتبار"
+    User->>System: "درخواست ورود"
+    System-->>User: "تایید"
 \`\`\`
 `;
 
-// --- Level 6: OpenAPI / Swagger Generation (Gap 3 Solution) ---
-export const PROMPT_LEVEL_6_API = `You are a Senior Backend Developer specialized in API Documentation.
-Task: Generate an OpenAPI 3.0 (Swagger) specification in JSON format.
-
-Input: A list of files that contain API endpoints (Controllers, Routes) along with extracted metadata about methods (GET, POST, etc).
+// --- Level 6: OpenAPI / Swagger Generation ---
+export const PROMPT_LEVEL_6_API = `You are an API Spec Generator.
+Task: Generate OpenAPI 3.0 JSON.
 
 Rules:
-1. Output MUST be valid JSON inside a \`\`\`json\`\`\` block.
-2. Guess the parameters and request/response bodies based on the function names and descriptions provided.
-3. Include a "info" section with Title: "Generated API Docs" and Version: "1.0.0".
-4. If no clear API is found, return an empty paths object.
+1. Output **ONLY** the valid JSON code block.
+2. Start with \`\`\`json and end with \`\`\`.
+3. Do not add any conversational text.
+`;
+
+// --- Level 7: ERD (Entity Relationship Diagram) ---
+export const PROMPT_LEVEL_7_ERD = `You are a Diagram Generator.
+Task: Generate a MermaidJS ER Diagram based on the provided schema files.
+
+CRITICAL RULES:
+1. Output **ONLY** the valid Mermaid code block.
+2. Start with \`\`\`mermaid and end with \`\`\`.
+3. Do **NOT** write any introduction.
+4. Use \`erDiagram\`.
+
+Example:
+\`\`\`mermaid
+erDiagram
+    USER ||--o{ ORDER : has
+\`\`\`
+`;
+
+// --- Level 8: Class Diagram ---
+export const PROMPT_LEVEL_8_CLASS = `You are a Diagram Generator.
+Task: Generate a MermaidJS Class Diagram based on the extracted classes.
+
+CRITICAL RULES:
+1. Output **ONLY** the valid Mermaid code block.
+2. Start with \`\`\`mermaid and end with \`\`\`.
+3. Do **NOT** write any introduction or summary text.
+4. Use \`classDiagram\`.
+`;
+
+// --- Level 9: Infrastructure Diagram ---
+export const PROMPT_LEVEL_9_INFRA = `You are a Diagram Generator.
+Task: Generate a MermaidJS Flowchart showing infrastructure components (Docker, Database, API).
+
+CRITICAL RULES:
+1. Output **ONLY** the valid Mermaid code block.
+2. Start with \`\`\`mermaid and end with \`\`\`.
+3. Do **NOT** write any text outside the code block.
+4. Use \`flowchart TD\`.
 `;

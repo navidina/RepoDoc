@@ -41,6 +41,69 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8; 
       }
+      /* Markdown details/summary styling */
+      details {
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        background-color: white;
+        margin-bottom: 0.5rem;
+        overflow: hidden;
+      }
+      summary {
+        background-color: #f8fafc;
+        cursor: pointer;
+        user-select: none;
+        padding: 0; /* Remove default padding to let inner flexbox handle it */
+      }
+      summary:hover {
+        background-color: #f1f5f9;
+      }
+      details[open] summary {
+        border-bottom: 1px solid #e2e8f0;
+      }
+      
+      /* New File Header Styling */
+      .file-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        direction: ltr; /* Force LTR for file paths */
+        width: 100%;
+        padding: 1rem;
+        box-sizing: border-box;
+      }
+      .file-info-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+      }
+      .file-icon {
+        flex-shrink: 0;
+      }
+      .file-name {
+        font-weight: 700;
+        color: #1e293b;
+        font-family: monospace;
+      }
+      .file-path {
+        color: #94a3b8;
+        font-size: 0.8em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 300px; /* Adjust based on needs */
+      }
+      .file-size {
+        color: #64748b;
+        font-size: 0.75em;
+        font-family: monospace;
+        flex-shrink: 0;
+        background: #e2e8f0;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 10px;
+      }
     </style>
   <script type="importmap">
 {

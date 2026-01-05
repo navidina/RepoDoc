@@ -1,4 +1,5 @@
 
+
 export interface FileNode {
   path: string;
   name: string;
@@ -38,6 +39,8 @@ export interface FileMetadata {
   imports: string[];
   apiEndpoints: string[]; // e.g., "GET /users"
   hasApiPattern: boolean;
+  isDbSchema: boolean;    // New: Detected as SQL/Prisma/Entity
+  isInfra: boolean;       // New: Detected as Docker/Terraform/Config
 }
 
 // --- RAG Types ---
@@ -50,4 +53,12 @@ export interface VectorDocument {
     endLine?: number;
   };
   embedding?: number[];
+}
+
+// --- GitHub Types ---
+export interface ProcessedFile {
+  path: string;
+  content: string;
+  size: number;
+  metadata: FileMetadata;
 }

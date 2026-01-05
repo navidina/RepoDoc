@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Server, LayoutTemplate, GitMerge, ChevronRight, Zap, FileCode, FileJson, FileType, Box, Braces, BrainCircuit } from 'lucide-react';
+import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, Link } from 'lucide-react';
 // @ts-ignore
 import ReactMarkdown from 'https://esm.sh/react-markdown@9.0.1?deps=react@19.2.3';
 // @ts-ignore
@@ -9,11 +8,12 @@ import remarkGfm from 'https://esm.sh/remark-gfm@4.0.0';
 import rehypeRaw from 'https://esm.sh/rehype-raw@7.0.0?bundle';
 // @ts-ignore
 import mermaid from 'https://esm.sh/mermaid@10.9.0';
-import { OllamaConfig, ProcessingLog, ChatMessage, FileMetadata } from '../types';
-import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_6_API, LANGUAGE_MAP } from '../utils/constants';
+import { OllamaConfig, ProcessingLog, ChatMessage, FileMetadata, ProcessedFile } from '../types';
+import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_6_API, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA, LANGUAGE_MAP } from '../utils/constants';
 import { generateCompletion, checkOllamaConnection, sendChatRequest } from '../services/ollamaService';
 import { extractFileMetadata } from '../services/codeParser';
 import { LocalVectorStore } from '../services/vectorStore';
+import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent } from '../services/githubService';
 
 // --- Helper Component: Mermaid Renderer ---
 const MermaidRenderer = ({ code }: { code: string }) => {
@@ -21,20 +21,19 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Function to fix common LLM mistakes in Mermaid syntax
   const fixMermaidSyntax = (rawCode: string) => {
     let fixed = rawCode
       .replace(/```mermaid/g, '')
       .replace(/```/g, '')
       .trim();
     
-    // Fix 1: Ensure flowchart TD if mistakenly graph TD
     if (fixed.startsWith('graph ')) {
        fixed = fixed.replace('graph ', 'flowchart ');
     }
 
-    // Fix 2: Quote unquoted parentheses in node labels (The "cli()" crasher)
-    fixed = fixed.replace(/\[([^"\]\n]*\([^"\]\n]*\)[^"\]\n]*)\]/g, '["$1"]');
+    if (fixed.includes('flowchart') || fixed.includes('graph')) {
+       fixed = fixed.replace(/\[([^"\]\n]*\([^"\]\n]*\)[^"\]\n]*)\]/g, '["$1"]');
+    }
 
     return fixed;
   };
@@ -101,17 +100,29 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   );
 };
 
-// --- Helper: Generate File Header HTML ---
+// --- Helper: Generate Clean File Header HTML ---
 const generateFileHeaderHTML = (path: string, size: number) => {
   const parts = path.split('/');
   const filename = parts.pop();
-  const extension = '.' + filename?.split('.').pop()?.toLowerCase();
-  const lang = LANGUAGE_MAP[extension || ''] || 'Code';
+  const dir = parts.join('/');
   const sizeKb = (size / 1024).toFixed(1);
   
-  const breadcrumbsHtml = parts.map((folder, index) => `<span class="flex items-center gap-1 opacity-60"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder text-blue-400"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span class="text-xs font-mono text-slate-600">${folder}</span><span class="text-slate-300 px-1">/</span></span>`).join('');
+  // Clean LTR container for file info, using utility classes defined in global CSS or inline styles
+  return `
+<div class="file-header">
+  <div class="file-info-group">
+    <span class="file-icon">📄</span>
+    <span class="file-name">${filename}</span>
+    <span class="file-path">${dir ? `${dir}/` : ''}</span>
+  </div>
+  <span class="file-size">${sizeKb} KB</span>
+</div>`;
+};
 
-  return `<div class="flex flex-wrap items-center justify-between w-full gap-2"><div class="flex flex-wrap items-center gap-2"><div class="flex items-center bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">${breadcrumbsHtml}<span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-code text-pink-500"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span class="text-sm font-bold text-slate-800 font-mono tracking-tight">${filename}</span></span></div></div><div class="flex items-center gap-2"><span class="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full shadow-sm dir-ltr font-mono">${sizeKb} KB</span><span class="text-[10px] font-bold text-white bg-slate-800 px-2 py-0.5 rounded-full shadow-sm dir-ltr">${lang}</span></div></div>`;
+// --- Helper: Extract Mermaid Code Block ---
+const extractMermaidCode = (response: string): string => {
+  const match = response.match(/```mermaid([\s\S]*?)```/);
+  return match ? `\`\`\`mermaid${match[1]}\`\`\`` : `\`\`\`mermaid\n${response}\n\`\`\``; // Fallback if no block found but implied
 };
 
 const BrowserGenerator: React.FC = () => {
@@ -122,22 +133,29 @@ const BrowserGenerator: React.FC = () => {
   const [config, setConfig] = useState<OllamaConfig>({
     baseUrl: OLLAMA_DEFAULT_URL,
     model: DEFAULT_MODEL,
-    embeddingModel: 'nomic-embed-text' // Default embedding model
+    embeddingModel: 'nomic-embed-text' 
   });
+  
+  // Input State
+  const [inputType, setInputType] = useState<'local' | 'github'>('local');
   const [files, setFiles] = useState<FileList | null>(null);
+  const [githubUrl, setGithubUrl] = useState('');
+
   const vectorStoreRef = useRef<LocalVectorStore | null>(null);
   
   // --- Documentation Levels State ---
   const [docLevels, setDocLevels] = useState({
-    root: true,    // Level 1
-    code: true,    // Level 2
-    arch: true,    // Level 3
-    ops: false,    // Level 4
-    sequence: true, // Level 5
-    api: false     // Level 6
+    root: true,    
+    code: true,    
+    arch: true,    
+    ops: false,    
+    sequence: true, 
+    api: false,     
+    erd: false,     
+    classDiagram: false, 
+    infra: false    
   });
 
-  // --- Documentation State ---
   const [generatedDoc, setGeneratedDoc] = useState<string>('');
   const [viewMode, setViewMode] = useState<'raw' | 'preview'>('preview'); 
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -145,20 +163,18 @@ const BrowserGenerator: React.FC = () => {
   // --- Chat State ---
   const [activeTab, setActiveTab] = useState<'docs' | 'chat'>('docs');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'system', content: 'شما یک دستیار هوشمند برنامه‌نویسی هستید. پاسخ‌ها باید کوتاه، دقیق و حرفه‌ای باشند. برای توضیحات کد از Markdown استفاده کنید.' }
+    { role: 'system', content: 'شما یک دستیار هوشمند برنامه‌نویسی هستید. پاسخ‌ها باید کوتاه، دقیق و حرفه‌ای باشند.' }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [hasContext, setHasContext] = useState(false);
-  const [isRetrieving, setIsRetrieving] = useState(false); // RAG State
+  const [isRetrieving, setIsRetrieving] = useState(false); 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  
   const addLog = (message: string, type: ProcessingLog['type'] = 'info') => {
     setLogs(prev => [...prev, { timestamp: new Date().toLocaleTimeString('fa-IR'), message, type }]);
   };
 
-  // --- Scroll to bottom of chat ---
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -181,8 +197,6 @@ const BrowserGenerator: React.FC = () => {
     reader.onload = (event) => {
       const text = event.target?.result as string;
       setGeneratedDoc(text);
-      // NOTE: Importing Markdown does not populate the vector store, so RAG won't work perfectly on just MD.
-      // But we can set a basic context.
       setHasContext(true);
       setViewMode('preview');
       setActiveTab('docs');
@@ -197,7 +211,9 @@ const BrowserGenerator: React.FC = () => {
 
   // --- MAIN PROCESSING PIPELINE ---
   const processRepository = async () => {
-    if (!files) return;
+    if (inputType === 'local' && !files) return;
+    if (inputType === 'github' && !githubUrl) return;
+
     setIsProcessing(true);
     setProgress(0);
     setGeneratedDoc('');
@@ -205,7 +221,7 @@ const BrowserGenerator: React.FC = () => {
     setViewMode('preview');
     setActiveTab('docs');
     setHasContext(false);
-    vectorStoreRef.current = new LocalVectorStore(config); // Initialize Vector Store
+    vectorStoreRef.current = new LocalVectorStore(config);
 
     try {
       addLog('در حال بررسی اتصال به Ollama...', 'info');
@@ -215,52 +231,112 @@ const BrowserGenerator: React.FC = () => {
       }
       addLog('اتصال به Ollama برقرار شد.', 'success');
 
-      const fileList: File[] = Array.from(files);
       let fileTree = '';
       const configContents: string[] = [];
-      const sourceFiles: { path: string; content: string, size: number, metadata: FileMetadata }[] = [];
+      const sourceFiles: ProcessedFile[] = [];
       const languageStats: Record<string, number> = {};
 
       addLog('فاز ۱: اسکن فایل‌ها و استخراج متادیتا (Static Analysis)...', 'info');
 
-      const readFileContent = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.onerror = (e) => reject(e);
-          reader.readAsText(file);
-        });
-      };
+      // --- File Fetching Strategy ---
+      if (inputType === 'local' && files) {
+          const fileList: File[] = Array.from(files);
+          
+          const readFileContent = (file: File): Promise<string> => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve(e.target?.result as string);
+              reader.onerror = (e) => reject(e);
+              reader.readAsText(file);
+            });
+          };
 
-      // --- Step 1: Scanning & Static Analysis (Gap 2 Solved) ---
-      for (const file of fileList) {
-        const filePath = file.webkitRelativePath || file.name;
-        const pathParts = filePath.split('/');
-        const hasIgnoredDir = pathParts.some(part => IGNORED_DIRS.has(part));
-        const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-        
-        if (hasIgnoredDir || !ALLOWED_EXTENSIONS.has(extension)) continue;
-        
-        const langName = LANGUAGE_MAP[extension || ''] || 'Other';
-        if (langName !== 'Other') {
-            languageStats[langName] = (languageStats[langName] || 0) + file.size;
-        }
+          for (const file of fileList) {
+            const filePath = file.webkitRelativePath || file.name;
+            const pathParts = filePath.split('/');
+            const hasIgnoredDir = pathParts.some(part => IGNORED_DIRS.has(part));
+            const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+            
+            if (hasIgnoredDir || !ALLOWED_EXTENSIONS.has(extension)) continue;
+            
+            const langName = LANGUAGE_MAP[extension || ''] || 'Other';
+            if (langName !== 'Other') {
+                languageStats[langName] = (languageStats[langName] || 0) + file.size;
+            }
 
-        fileTree += `- ${filePath}\n`;
+            fileTree += `- ${filePath}\n`;
 
-        if (CONFIG_FILES.has(file.name)) {
-          const content = await readFileContent(file);
-          configContents.push(`\n--- ${file.name} ---\n${content}\n`);
-          addLog(`فایل کانفیگ پیدا شد: ${file.name}`, 'success');
-        } else if (file.size < 50000) { 
-          const content = await readFileContent(file);
-          // RUN STATIC ANALYSIS HERE (Deterministic)
-          const metadata = extractFileMetadata(content, filePath);
-          sourceFiles.push({ path: filePath, content, size: file.size, metadata });
-        }
+            if (CONFIG_FILES.has(file.name)) {
+              const content = await readFileContent(file);
+              configContents.push(`\n--- ${file.name} ---\n${content}\n`);
+              addLog(`فایل کانفیگ پیدا شد: ${file.name}`, 'success');
+              if (file.name.includes('docker') || file.name.endsWith('.prisma') || file.name.endsWith('.tf')) {
+                 const metadata = extractFileMetadata(content, filePath);
+                 sourceFiles.push({ path: filePath, content, size: file.size, metadata });
+              }
+            } else if (file.size < 50000) { 
+              const content = await readFileContent(file);
+              const metadata = extractFileMetadata(content, filePath);
+              sourceFiles.push({ path: filePath, content, size: file.size, metadata });
+            }
+          }
+      } else if (inputType === 'github') {
+          const repoInfo = parseGithubUrl(githubUrl);
+          if (!repoInfo) throw new Error("آدرس گیت‌هاب نامعتبر است.");
+          
+          addLog(`در حال دریافت لیست فایل‌ها از ${repoInfo.owner}/${repoInfo.repo}...`, 'info');
+          const { tree, branch } = await fetchGithubRepoTree(repoInfo.owner, repoInfo.repo);
+          
+          let fetchedCount = 0;
+          const maxFetch = 40; // Limit for performance
+
+          // Prioritize config files and allowed extensions
+          const relevantNodes = tree.filter(node => {
+              const hasIgnoredDir = node.path.split('/').some(part => IGNORED_DIRS.has(part));
+              const extension = '.' + node.path.split('.').pop()?.toLowerCase();
+              return node.type === 'blob' && !hasIgnoredDir && ALLOWED_EXTENSIONS.has(extension);
+          });
+
+          addLog(`تعداد ${relevantNodes.length} فایل مرتبط پیدا شد. دانلود محتوا (محدود به ${maxFetch} فایل مهم)...`, 'info');
+
+          for (const node of relevantNodes) {
+             const filename = node.path.split('/').pop() || '';
+             const extension = '.' + filename.split('.').pop()?.toLowerCase();
+             const isConfig = CONFIG_FILES.has(filename);
+             
+             // Update Stats (approximate size if not available)
+             const size = node.size || 1000;
+             const langName = LANGUAGE_MAP[extension || ''] || 'Other';
+             if (langName !== 'Other') languageStats[langName] = (languageStats[langName] || 0) + size;
+             
+             fileTree += `- ${node.path}\n`;
+
+             // Fetch logic: Always fetch configs, fetch others up to limit
+             if (isConfig || fetchedCount < maxFetch) {
+                 const content = await fetchGithubFileContent(repoInfo.owner, repoInfo.repo, branch, node.path);
+                 fetchedCount++;
+                 
+                 if (isConfig) {
+                     configContents.push(`\n--- ${filename} ---\n${content}\n`);
+                     addLog(`فایل کانفیگ دریافت شد: ${filename}`, 'success');
+                 }
+                 
+                 // Add to sourceFiles if strictly code or special config
+                 if (isConfig && (filename.includes('docker') || filename.endsWith('.prisma') || filename.endsWith('.tf'))) {
+                     const metadata = extractFileMetadata(content, node.path);
+                     sourceFiles.push({ path: node.path, content, size, metadata });
+                 } else if (!isConfig && content.length < 50000) {
+                     const metadata = extractFileMetadata(content, node.path);
+                     sourceFiles.push({ path: node.path, content, size, metadata });
+                 }
+                 
+                 // Update progress visually during fetch
+                 if (fetchedCount % 5 === 0) setProgress(Math.round((fetchedCount / maxFetch) * 10));
+             }
+          }
       }
 
-      // Generate Stats Markdown
+      // Generate Stats
       const totalBytes = Object.values(languageStats).reduce((a, b) => a + b, 0);
       let statsMarkdown = '';
       if (totalBytes > 0) {
@@ -279,37 +355,43 @@ ${sortedStats.map(s => `| ${s.lang} | ${(s.size / 1024).toFixed(1)} KB | ${s.per
 `;
       }
 
-      // Calculate Progress Steps
-      // Adding weight for indexing phase
-      const indexingWeight = 20; // 20% of progress
+      const indexingWeight = 20; 
       let totalSteps = 0;
       if (docLevels.code) totalSteps += sourceFiles.length; 
       if (docLevels.arch) totalSteps += 1; 
       if (docLevels.sequence) totalSteps += 1; 
       if (docLevels.ops) totalSteps += 1; 
       if (docLevels.api) totalSteps += 1; 
-      if (docLevels.root) totalSteps += 1; 
+      if (docLevels.root) totalSteps += 1;
+      if (docLevels.erd) totalSteps += 1;
+      if (docLevels.classDiagram) totalSteps += 1;
+      if (docLevels.infra) totalSteps += 1;
       
       let completedSteps = 0;
       const updateProgress = (extra: number = 0) => {
-        const analysisProgress = Math.min(Math.round((completedSteps / totalSteps) * 80), 80); // 80% max for analysis
+        const total = totalSteps > 0 ? totalSteps : 1;
+        const analysisProgress = Math.min(Math.round((completedSteps / total) * 80), 80); 
         setProgress(analysisProgress + extra);
       };
 
-      // Doc parts
       let partRoot = '';
       let partArch = '';
       let partOps = '';
       let partSeq = '';
       let partApi = '';
+      let partErd = '';
+      let partClass = '';
+      let partInfra = '';
       let partCode = '';
 
-      // --- Assemble Document Function ---
       const assembleDoc = () => {
           let doc = `# مستندات جامع پروژه\n\nتولید شده توسط RepoDocs AI\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
           if (statsMarkdown) doc += `## 📊 آمار و تکنولوژی‌های پروژه\n\n${statsMarkdown}\n\n---\n\n`;
           if (partRoot) doc += `${partRoot}\n\n---\n\n`;
           if (partArch) doc += `## 🏗 معماری سیستم\n\n${partArch}\n\n---\n\n`;
+          if (partErd) doc += `## 🗄 مدل داده‌ها (ERD)\n\n${partErd}\n\n---\n\n`;
+          if (partClass) doc += `## 🧩 نمودار کلاس (Class Diagram)\n\n${partClass}\n\n---\n\n`;
+          if (partInfra) doc += `## ☁️ زیرساخت (Infrastructure)\n\n${partInfra}\n\n---\n\n`;
           if (partSeq) doc += `## 🔄 نمودار توالی (Sequence Diagram)\n\n${partSeq}\n\n---\n\n`;
           if (partApi) doc += `## 🔌 مستندات API (OpenAPI)\n\n${partApi}\n\n---\n\n`;
           if (partOps) doc += `## 🚀 راهنمای عملیاتی و دیپلوی\n\n${partOps}\n\n---\n\n`;
@@ -317,56 +399,47 @@ ${sortedStats.map(s => `| ${s.lang} | ${(s.size / 1024).toFixed(1)} KB | ${s.per
           return doc;
       };
 
-      // =========================================================================================
-      // PHASE 1.5: RAG Indexing (Ingestion) - Gap 1 Solution
-      // =========================================================================================
       addLog(`فاز ۲: ایندکس کردن برداری کدها (RAG) با مدل ${config.embeddingModel}...`, 'info');
       await vectorStoreRef.current?.addDocuments(sourceFiles, (current, total) => {
-          const percentage = Math.round((current / total) * 20); // 0-20%
+          const percentage = Math.round((current / total) * 20); 
           setProgress(percentage);
       });
       addLog('ایندکس‌سازی کدها تکمیل شد. چت هوشمند آماده است.', 'success');
-      setHasContext(true); // Now we have RAG context available
+      setHasContext(true);
 
-      // --- Store Summaries for Map-Reduce ---
       const fileSummaries: string[] = [];
 
-      // =========================================================================================
-      // PHASE 2: Code Analysis (Map Phase) - Level 2
-      // =========================================================================================
+      // Phase 2: Code Analysis (Level 2)
       if (docLevels.code) {
         addLog(`فاز ۳: تحلیل کدها (${sourceFiles.length} فایل) با استفاده از Map-Reduce...`, 'info');
         
         for (const file of sourceFiles) {
-          // addLog(`در حال تحلیل ${file.path}...`, 'info'); // Too verbose
-          
-          // Inject "Facts" (Metadata) into the prompt to reduce hallucinations (Gap 2)
           const facts = [
             file.metadata.classes.length > 0 ? `Classes found: ${file.metadata.classes.join(', ')}` : '',
             file.metadata.functions.length > 0 ? `Functions/Methods found: ${file.metadata.functions.join(', ')}` : '',
-            file.metadata.hasApiPattern ? `Potentially contains API Endpoints` : ''
+            file.metadata.hasApiPattern ? `Potentially contains API Endpoints` : '',
+            file.metadata.isDbSchema ? `Contains Database Schema Definition` : '',
+            file.metadata.isInfra ? `Infrastructure Configuration File` : ''
           ].filter(Boolean).join('\n');
 
           const filePrompt = `File Path: ${file.path}\n\nFACTS (Detected by Parser):\n${facts}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
           
           const rawResponse = await generateCompletion(config, filePrompt, PROMPT_LEVEL_2_CODE);
           
-          // Split response into Display Doc and Context Summary
           const summarySplit = rawResponse.split('**SUMMARY_FOR_CONTEXT**');
           const displayContent = summarySplit[0].trim();
           const technicalSummary = summarySplit[1] ? summarySplit[1].trim() : "No summary provided.";
 
           fileSummaries.push(`File: ${file.path}\nSummary: ${technicalSummary}\nDetected Metadata: ${JSON.stringify(file.metadata)}\n`);
 
-          const fileHeader = generateFileHeaderHTML(file.path, file.size);
+          const headerHTML = generateFileHeaderHTML(file.path, file.size);
+          // Use standard markdown details/summary. The CSS in index.html will handle styling.
           partCode += `
-<details class="group bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden transition-all hover:shadow-md open:shadow-lg open:ring-1 open:ring-blue-100">
-<summary class="flex items-center justify-between p-4 cursor-pointer bg-slate-50/50 hover:bg-slate-50 transition-colors list-none select-none">
-${fileHeader}
-</summary>
-<div class="p-6 border-t border-slate-100 prose prose-slate max-w-none">
-\n${displayContent}\n
-</div>
+<details>
+<summary>${headerHTML}</summary>
+
+${displayContent}
+
 </details>
 \n`;
 
@@ -376,8 +449,6 @@ ${fileHeader}
         }
       }
 
-      // --- REDUCE CONTEXT PREPARATION ---
-      // Instead of raw code, we use summaries + facts. Drastically reduces token usage.
       const reducedContext = `
 CONTEXT FOR ARCHITECTURE & ROOT DOCS:
 Project File Tree:
@@ -390,12 +461,9 @@ File Technical Summaries (Map-Reduce Output):
 ${fileSummaries.join('\n----------------\n')}
 `;
 
-      // =========================================================================================
-      // PHASE 3: High-Level Docs (Reduce Phase) - Level 3 & 5
-      // =========================================================================================
-      
+      // Diagrams & Architecture
       if (docLevels.arch) {
-        addLog('فاز ۴: تحلیل معماری (بر اساس خلاصه‌ها)...', 'info');
+        addLog('فاز ۴: تحلیل معماری کلان...', 'info');
         const archContent = await generateCompletion(config, reducedContext, PROMPT_LEVEL_3_ARCH);
         partArch = archContent;
         setGeneratedDoc(assembleDoc());
@@ -403,31 +471,66 @@ ${fileSummaries.join('\n----------------\n')}
         updateProgress(20);
       }
 
-      if (docLevels.sequence) {
-        addLog('فاز ۵: ترسیم نمودار توالی...', 'info');
-        const seqContent = await generateCompletion(config, reducedContext, PROMPT_LEVEL_5_SEQUENCE);
-        partSeq = seqContent;
+      if (docLevels.erd) {
+        addLog('فاز ۵: ترسیم نمودار دیتابیس (ERD)...', 'info');
+        const dbFiles = sourceFiles.filter(f => f.metadata.isDbSchema || f.path.includes('entity') || f.path.includes('model'));
+        if (dbFiles.length > 0) {
+            const dbContext = dbFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n');
+            const erdContent = await generateCompletion(config, dbContext, PROMPT_LEVEL_7_ERD);
+            partErd = extractMermaidCode(erdContent);
+        } else {
+            partErd = "> فایل مشخصی برای اسکیما دیتابیس پیدا نشد.";
+        }
         setGeneratedDoc(assembleDoc());
         completedSteps++;
         updateProgress(20);
       }
 
-      // =========================================================================================
-      // PHASE 4: OpenAPI Generation (Level 6) - Gap 3 Solution
-      // =========================================================================================
+      if (docLevels.classDiagram) {
+        addLog('فاز ۶: ترسیم نمودار کلاس...', 'info');
+        const classContext = `
+        List of detected classes and structure:
+        ${fileSummaries.filter(s => s.includes('"classes":[')).join('\n')}
+        `;
+        const classContent = await generateCompletion(config, classContext, PROMPT_LEVEL_8_CLASS);
+        partClass = extractMermaidCode(classContent);
+        setGeneratedDoc(assembleDoc());
+        completedSteps++;
+        updateProgress(20);
+      }
+
+      if (docLevels.infra) {
+        addLog('فاز ۷: ترسیم نمودار زیرساخت (Docker/Cloud)...', 'info');
+        const infraFiles = sourceFiles.filter(f => f.metadata.isInfra || CONFIG_FILES.has(f.path.split('/').pop() || ''));
+        if (infraFiles.length > 0) {
+            const infraContext = infraFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n');
+            const infraContent = await generateCompletion(config, infraContext, PROMPT_LEVEL_9_INFRA);
+            partInfra = extractMermaidCode(infraContent);
+        } else {
+            partInfra = "> فایل‌های زیرساخت پیدا نشد.";
+        }
+        setGeneratedDoc(assembleDoc());
+        completedSteps++;
+        updateProgress(20);
+      }
+
+      if (docLevels.sequence) {
+        addLog('فاز ۸: ترسیم نمودار توالی...', 'info');
+        const seqContent = await generateCompletion(config, reducedContext, PROMPT_LEVEL_5_SEQUENCE);
+        partSeq = extractMermaidCode(seqContent);
+        setGeneratedDoc(assembleDoc());
+        completedSteps++;
+        updateProgress(20);
+      }
+
       if (docLevels.api) {
-        addLog('فاز ۶: تولید مستندات API (OpenAPI/Swagger)...', 'info');
-        
-        // Filter only relevant files for API generation to save tokens
+        addLog('فاز ۹: تولید مستندات API...', 'info');
         const apiFiles = sourceFiles.filter(f => f.metadata.hasApiPattern || f.path.includes('routes') || f.path.includes('controller'));
-        
         if (apiFiles.length === 0) {
             partApi = "> هیچ الگوی API (مانند REST Controller یا Route) در پروژه یافت نشد.";
         } else {
             const apiContext = apiFiles.map(f => `File: ${f.path}\nExtracted Endpoints: ${f.metadata.apiEndpoints.join(', ')}\nContent:\n${f.content}`).join('\n\n');
             const apiContent = await generateCompletion(config, apiContext, PROMPT_LEVEL_6_API);
-            
-            // Try to extract JSON block
             const jsonMatch = apiContent.match(/```json([\s\S]*?)```/);
             if (jsonMatch) {
                partApi = `\n\`\`\`json\n${jsonMatch[1]}\n\`\`\`\n\n_برای مشاهده این مستندات، کد بالا را در [Swagger Editor](https://editor.swagger.io) کپی کنید._`;
@@ -440,11 +543,8 @@ ${fileSummaries.join('\n----------------\n')}
         updateProgress(20);
       }
 
-      // =========================================================================================
-      // PHASE 5: Operational & Root
-      // =========================================================================================
       if (docLevels.ops) {
-        addLog('فاز ۷: مستندات عملیاتی...', 'info');
+        addLog('فاز ۱۰: مستندات عملیاتی...', 'info');
         const opsPrompt = `Config Files:\n${configContents.join('\n')}`;
         const opsContent = await generateCompletion(config, opsPrompt, PROMPT_LEVEL_4_OPS);
         partOps = opsContent;
@@ -485,10 +585,8 @@ ${fileSummaries.join('\n----------------\n')}
     try {
       let contextContent = "";
       
-      // --- RAG RETRIEVAL ---
       if (hasContext && vectorStoreRef.current) {
          setIsRetrieving(true);
-         // Retrieve top 5 chunks relevant to the user query
          const relevantDocs = await vectorStoreRef.current.similaritySearch(userText, 5);
          
          if (relevantDocs.length > 0) {
@@ -498,7 +596,6 @@ ${fileSummaries.join('\n----------------\n')}
          setIsRetrieving(false);
       }
 
-      // Add System Prompt with RAG Context
       const systemMessage: ChatMessage = { 
          role: 'system', 
          content: `You are an expert code assistant. 
@@ -568,9 +665,9 @@ ${fileSummaries.join('\n----------------\n')}
             <div className="my-4 dir-ltr"><code className="block bg-[#1E293B] p-4 rounded-xl overflow-x-auto text-sm font-mono text-slate-300 border border-slate-800 shadow-lg" {...props}>{children}</code></div>
           )
         },
-        // Custom summary/details styling
+        // IMPORTANT: Styles for details/summary to look good in UI without polluting Markdown file with classes
         details: ({node, ...props}: any) => <details className="group bg-white border border-slate-200 rounded-xl mb-3 overflow-hidden transition-all shadow-sm hover:shadow-md" {...props} />,
-        summary: ({node, ...props}: any) => <summary className="cursor-pointer p-4 font-mono text-sm font-medium hover:bg-slate-50 select-none text-slate-700 outline-none flex items-center gap-2" {...props} />
+        summary: ({node, ...props}: any) => <summary className="cursor-pointer p-4 hover:bg-slate-50 select-none text-slate-700 outline-none" {...props} />
       }}
     >
       {content}
@@ -579,66 +676,104 @@ ${fileSummaries.join('\n----------------\n')}
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full">
-      {/* Left Panel: Controls (Styled as a dashboard widget column) */}
+      {/* Left Panel: Controls */}
       <div className="xl:col-span-4 flex flex-col gap-6 h-full overflow-y-auto pr-1">
         
-        {/* Widget: File Selection */}
+        {/* Widget: Source Selection (Updated) */}
         <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
           <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center justify-between">
              <span className="flex items-center gap-3">
                <div className="bg-blue-100 p-2 rounded-xl"><Folder className="w-5 h-5 text-blue-600" /></div>
-               انتخاب پروژه
+               انتخاب منبع کد
              </span>
-             {files && <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold">{files.length} فایل</span>}
+             {files && inputType === 'local' && <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold">{files.length} فایل</span>}
           </h2>
           
-          <div className="relative group">
-            <input
-              type="file"
-              // @ts-ignore
-              webkitdirectory=""
-              directory=""
-              onChange={handleDirectorySelect}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              disabled={isProcessing}
-            />
-            <div className={`border-2 border-dashed rounded-2xl p-8 transition-all text-center group-hover:border-blue-400 group-hover:bg-blue-50/50 ${files ? 'border-green-300 bg-green-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
-               <div className="bg-white p-3 rounded-full shadow-sm w-12 h-12 mx-auto flex items-center justify-center mb-3 text-blue-500 group-hover:scale-110 transition-transform">
-                 <Upload className="w-6 h-6" />
-               </div>
-               <p className="text-sm font-bold text-slate-700 mb-1">{files ? 'پوشه انتخاب شد' : 'انتخاب پوشه کد'}</p>
-               <p className="text-xs text-slate-400">کلیک کنید یا درگ کنید</p>
-            </div>
+          {/* Tabs */}
+          <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+            <button 
+               onClick={() => setInputType('local')}
+               className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${inputType === 'local' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+               <Folder className="w-4 h-4" /> پوشه محلی
+            </button>
+            <button 
+               onClick={() => setInputType('github')}
+               className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${inputType === 'github' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+               <Github className="w-4 h-4" /> گیت‌هاب
+            </button>
           </div>
+
+          {inputType === 'local' ? (
+            <div className="relative group">
+              <input
+                type="file"
+                // @ts-ignore
+                webkitdirectory=""
+                directory=""
+                onChange={handleDirectorySelect}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                disabled={isProcessing}
+              />
+              <div className={`border-2 border-dashed rounded-2xl p-8 transition-all text-center group-hover:border-blue-400 group-hover:bg-blue-50/50 ${files ? 'border-green-300 bg-green-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
+                <div className="bg-white p-3 rounded-full shadow-sm w-12 h-12 mx-auto flex items-center justify-center mb-3 text-blue-500 group-hover:scale-110 transition-transform">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <p className="text-sm font-bold text-slate-700 mb-1">{files ? 'پوشه انتخاب شد' : 'انتخاب پوشه کد'}</p>
+                <p className="text-xs text-slate-400">کلیک کنید یا درگ کنید</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="relative">
+                <Github className="absolute right-3 top-3 w-5 h-5 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={githubUrl}
+                  onChange={(e) => setGithubUrl(e.target.value)}
+                  placeholder="https://github.com/username/repo"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pr-10 text-slate-700 text-sm dir-ltr text-left outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed bg-blue-50 text-blue-600 p-2 rounded-lg">
+                <Info className="w-3 h-3 inline ml-1" />
+                نکته: برای ریپازیتوری‌های عمومی، فایل‌های اصلی و کانفیگ دانلود و تحلیل می‌شوند.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Widget: Config Levels */}
         <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
           <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-3">
              <div className="bg-purple-100 p-2 rounded-xl"><Layers className="w-5 h-5 text-purple-600" /></div>
-             سطوح تحلیل
+             سطوح تحلیل و دیاگرام
           </h2>
           <div className="space-y-3">
              {[
-               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + خلاصه سازی', color: 'slate' },
+               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + خلاصه', color: 'slate' },
                { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', color: 'indigo' },
+               { id: 'erd', label: 'دیتابیس (ERD)', desc: 'مدل داده (Prisma/SQL)', color: 'blue' }, 
+               { id: 'classDiagram', label: 'نمودار کلاس', desc: 'تحلیل شی‌گرایی', color: 'orange' }, 
+               { id: 'infra', label: 'زیرساخت', desc: 'Docker / Terraform', color: 'cyan' }, 
                { id: 'sequence', label: 'نمودار توالی', desc: 'سناریوی اصلی', color: 'purple' },
-               { id: 'api', label: 'مستندات API', desc: 'تولید OpenAPI Spec', color: 'emerald' }, // New Option
+               { id: 'api', label: 'مستندات API', desc: 'OpenAPI Spec', color: 'emerald' },
                { id: 'ops', label: 'عملیاتی (DevOps)', desc: 'دیپلوی و کانفیگ', color: 'pink' },
                { id: 'root', label: 'ریشه (README)', desc: 'معرفی و نصب', color: 'blue' }
              ].map((level) => (
-                <label key={level.id} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all duration-300 group hover:shadow-md ${
+                <label key={level.id} className={`flex items-center gap-4 p-3.5 rounded-2xl border cursor-pointer transition-all duration-300 group hover:shadow-md ${
                   // @ts-ignore
                   docLevels[level.id] 
                   ? 'bg-slate-900 border-slate-900 shadow-lg shadow-slate-900/10' 
                   : 'bg-white border-slate-100 hover:border-slate-300'
                 }`}>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                     // @ts-ignore
                     docLevels[level.id] ? 'border-white bg-transparent' : 'border-slate-300 bg-slate-50'
                   }`}>
                     {/* @ts-ignore */}
-                    {docLevels[level.id] && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
+                    {docLevels[level.id] && <div className="w-2 h-2 bg-white rounded-full" />}
                   </div>
                   <input type="checkbox" 
                     // @ts-ignore
@@ -652,7 +787,7 @@ ${fileSummaries.join('\n----------------\n')}
                       // @ts-ignore
                       docLevels[level.id] ? 'text-white' : 'text-slate-700'
                     }`}>{level.label}</span>
-                    <span className={`text-[11px] transition-colors ${
+                    <span className={`text-[10px] transition-colors ${
                       // @ts-ignore
                       docLevels[level.id] ? 'text-slate-400' : 'text-slate-400'
                     }`}>{level.desc}</span>
@@ -693,7 +828,6 @@ ${fileSummaries.join('\n----------------\n')}
              <div>
                <label className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1 mr-1">
                  مدل Embedding (RAG)
-                 <span className="text-[10px] bg-blue-50 text-blue-500 px-1.5 rounded">New</span>
                </label>
                <input 
                   type="text" 
@@ -722,9 +856,9 @@ ${fileSummaries.join('\n----------------\n')}
         <div>
           <button
             onClick={processRepository}
-            disabled={!files || isProcessing}
+            disabled={(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing}
             className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 active:scale-95 text-lg
-              ${!files || isProcessing 
+              ${(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing 
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' 
                 : 'bg-slate-900 text-white shadow-slate-900/30'}`}
           >
@@ -772,7 +906,7 @@ ${fileSummaries.join('\n----------------\n')}
         </div>
       </div>
 
-      {/* Right Panel: Output & Chat (Styled as main content area) */}
+      {/* Right Panel: Output & Chat */}
       <div className="xl:col-span-8 bg-white rounded-[2.5rem] shadow-soft border border-white flex flex-col h-full overflow-hidden relative">
         {/* Header Tabs */}
         <div className="flex items-center px-8 pt-8 pb-4 justify-between bg-white z-10">
