@@ -1,14 +1,19 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Server, LayoutTemplate, GitMerge, ChevronRight, Zap } from 'lucide-react';
+import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Server, LayoutTemplate, GitMerge, ChevronRight, Zap, FileCode, FileJson, FileType, Box, Braces, BrainCircuit } from 'lucide-react';
 // @ts-ignore
 import ReactMarkdown from 'https://esm.sh/react-markdown@9.0.1?deps=react@19.2.3';
 // @ts-ignore
 import remarkGfm from 'https://esm.sh/remark-gfm@4.0.0';
 // @ts-ignore
+import rehypeRaw from 'https://esm.sh/rehype-raw@7.0.0?bundle';
+// @ts-ignore
 import mermaid from 'https://esm.sh/mermaid@10.9.0';
-import { OllamaConfig, ProcessingLog, ChatMessage } from '../types';
-import { IGNORED_DIRS, IGNORED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE } from '../utils/constants';
+import { OllamaConfig, ProcessingLog, ChatMessage, FileMetadata } from '../types';
+import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_6_API, LANGUAGE_MAP } from '../utils/constants';
 import { generateCompletion, checkOllamaConnection, sendChatRequest } from '../services/ollamaService';
+import { extractFileMetadata } from '../services/codeParser';
+import { LocalVectorStore } from '../services/vectorStore';
 
 // --- Helper Component: Mermaid Renderer ---
 const MermaidRenderer = ({ code }: { code: string }) => {
@@ -29,14 +34,8 @@ const MermaidRenderer = ({ code }: { code: string }) => {
     }
 
     // Fix 2: Quote unquoted parentheses in node labels (The "cli()" crasher)
-    // Regex matches: [ followed by anything NOT quote, then (, then ), then anything NOT quote, then ]
-    // Converts A[text()] to A["text()"]
-    // It captures the content inside [] and wraps it in quotes if it contains ()
     fixed = fixed.replace(/\[([^"\]\n]*\([^"\]\n]*\)[^"\]\n]*)\]/g, '["$1"]');
 
-    // Fix 3: Quote unquoted parentheses in edge labels if possible (simplified)
-    // text in || or text in -- --
-    
     return fixed;
   };
 
@@ -62,7 +61,6 @@ const MermaidRenderer = ({ code }: { code: string }) => {
         });
 
         const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
-        // render returns an object { svg: string }
         const { svg } = await mermaid.render(id, cleanCode);
         setSvg(svg);
       } catch (error: any) {
@@ -103,6 +101,18 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   );
 };
 
+// --- Helper: Generate File Header HTML ---
+const generateFileHeaderHTML = (path: string, size: number) => {
+  const parts = path.split('/');
+  const filename = parts.pop();
+  const extension = '.' + filename?.split('.').pop()?.toLowerCase();
+  const lang = LANGUAGE_MAP[extension || ''] || 'Code';
+  const sizeKb = (size / 1024).toFixed(1);
+  
+  const breadcrumbsHtml = parts.map((folder, index) => `<span class="flex items-center gap-1 opacity-60"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder text-blue-400"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span class="text-xs font-mono text-slate-600">${folder}</span><span class="text-slate-300 px-1">/</span></span>`).join('');
+
+  return `<div class="flex flex-wrap items-center justify-between w-full gap-2"><div class="flex flex-wrap items-center gap-2"><div class="flex items-center bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">${breadcrumbsHtml}<span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-code text-pink-500"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span class="text-sm font-bold text-slate-800 font-mono tracking-tight">${filename}</span></span></div></div><div class="flex items-center gap-2"><span class="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full shadow-sm dir-ltr font-mono">${sizeKb} KB</span><span class="text-[10px] font-bold text-white bg-slate-800 px-2 py-0.5 rounded-full shadow-sm dir-ltr">${lang}</span></div></div>`;
+};
 
 const BrowserGenerator: React.FC = () => {
   // --- General State ---
@@ -111,9 +121,11 @@ const BrowserGenerator: React.FC = () => {
   const [progress, setProgress] = useState(0); 
   const [config, setConfig] = useState<OllamaConfig>({
     baseUrl: OLLAMA_DEFAULT_URL,
-    model: DEFAULT_MODEL
+    model: DEFAULT_MODEL,
+    embeddingModel: 'nomic-embed-text' // Default embedding model
   });
   const [files, setFiles] = useState<FileList | null>(null);
+  const vectorStoreRef = useRef<LocalVectorStore | null>(null);
   
   // --- Documentation Levels State ---
   const [docLevels, setDocLevels] = useState({
@@ -121,7 +133,8 @@ const BrowserGenerator: React.FC = () => {
     code: true,    // Level 2
     arch: true,    // Level 3
     ops: false,    // Level 4
-    sequence: true // Level 5 (New)
+    sequence: true, // Level 5
+    api: false     // Level 6
   });
 
   // --- Documentation State ---
@@ -137,6 +150,7 @@ const BrowserGenerator: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [hasContext, setHasContext] = useState(false);
+  const [isRetrieving, setIsRetrieving] = useState(false); // RAG State
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   
@@ -150,25 +164,6 @@ const BrowserGenerator: React.FC = () => {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages, activeTab]);
-
-  const updateChatContext = (docContent: string) => {
-    const contextSystemMessage = `*** PROJECT CONTEXT START ***
-${docContent}
-*** PROJECT CONTEXT END ***
-
-ROLE & INSTRUCTIONS:
-You are a dedicated Technical Assistant for the project described above.
-1. Answer the user's questions **EXCLUSIVELY** based on the content within "*** PROJECT CONTEXT START ***" and "*** PROJECT CONTEXT END ***".
-2. Do **NOT** provide generic programming advice. If the user asks "How to run?", look specifically for "Installation", "Scripts", or "Usage" sections in the provided context.
-3. If the answer is explicitly found in the context, translate the instructions to Persian and explain them clearly.
-4. If the answer is NOT found in the context, say: "متاسفانه اطلاعاتی در مورد این سوال در مستندات پروژه یافت نشد."
-5. Always answer in Persian.`;
-
-    setChatMessages([
-      { role: 'system', content: contextSystemMessage }
-    ]);
-    setHasContext(true);
-  };
 
   const handleDirectorySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -186,7 +181,9 @@ You are a dedicated Technical Assistant for the project described above.
     reader.onload = (event) => {
       const text = event.target?.result as string;
       setGeneratedDoc(text);
-      updateChatContext(text);
+      // NOTE: Importing Markdown does not populate the vector store, so RAG won't work perfectly on just MD.
+      // But we can set a basic context.
+      setHasContext(true);
       setViewMode('preview');
       setActiveTab('docs');
       addLog(`فایل ${file.name} با موفقیت بارگذاری شد.`, 'success');
@@ -198,6 +195,7 @@ You are a dedicated Technical Assistant for the project described above.
     reader.readAsText(file);
   };
 
+  // --- MAIN PROCESSING PIPELINE ---
   const processRepository = async () => {
     if (!files) return;
     setIsProcessing(true);
@@ -207,6 +205,7 @@ You are a dedicated Technical Assistant for the project described above.
     setViewMode('preview');
     setActiveTab('docs');
     setHasContext(false);
+    vectorStoreRef.current = new LocalVectorStore(config); // Initialize Vector Store
 
     try {
       addLog('در حال بررسی اتصال به Ollama...', 'info');
@@ -219,9 +218,10 @@ You are a dedicated Technical Assistant for the project described above.
       const fileList: File[] = Array.from(files);
       let fileTree = '';
       const configContents: string[] = [];
-      const sourceFiles: { path: string; content: string }[] = [];
+      const sourceFiles: { path: string; content: string, size: number, metadata: FileMetadata }[] = [];
+      const languageStats: Record<string, number> = {};
 
-      addLog('در حال اسکن و فیلتر کردن فایل‌ها...', 'info');
+      addLog('فاز ۱: اسکن فایل‌ها و استخراج متادیتا (Static Analysis)...', 'info');
 
       const readFileContent = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -232,14 +232,19 @@ You are a dedicated Technical Assistant for the project described above.
         });
       };
 
+      // --- Step 1: Scanning & Static Analysis (Gap 2 Solved) ---
       for (const file of fileList) {
-        // Use webkitRelativePath for structure, fallback to name if missing
         const filePath = file.webkitRelativePath || file.name;
         const pathParts = filePath.split('/');
         const hasIgnoredDir = pathParts.some(part => IGNORED_DIRS.has(part));
         const extension = '.' + file.name.split('.').pop()?.toLowerCase();
         
-        if (hasIgnoredDir || IGNORED_EXTENSIONS.has(extension)) continue;
+        if (hasIgnoredDir || !ALLOWED_EXTENSIONS.has(extension)) continue;
+        
+        const langName = LANGUAGE_MAP[extension || ''] || 'Other';
+        if (langName !== 'Other') {
+            languageStats[langName] = (languageStats[langName] || 0) + file.size;
+        }
 
         fileTree += `- ${filePath}\n`;
 
@@ -247,132 +252,218 @@ You are a dedicated Technical Assistant for the project described above.
           const content = await readFileContent(file);
           configContents.push(`\n--- ${file.name} ---\n${content}\n`);
           addLog(`فایل کانفیگ پیدا شد: ${file.name}`, 'success');
-        } else if (file.size < 20000) {
+        } else if (file.size < 50000) { 
           const content = await readFileContent(file);
-          sourceFiles.push({ path: filePath, content });
+          // RUN STATIC ANALYSIS HERE (Deterministic)
+          const metadata = extractFileMetadata(content, filePath);
+          sourceFiles.push({ path: filePath, content, size: file.size, metadata });
         }
       }
 
-      // Calculate total steps based on selected levels
+      // Generate Stats Markdown
+      const totalBytes = Object.values(languageStats).reduce((a, b) => a + b, 0);
+      let statsMarkdown = '';
+      if (totalBytes > 0) {
+        const sortedStats = Object.entries(languageStats)
+          .sort(([, a], [, b]) => b - a)
+          .map(([lang, size]) => ({
+             lang,
+             size,
+             percent: ((size / totalBytes) * 100).toFixed(1)
+          }));
+        
+        statsMarkdown = `
+| زبان / تکنولوژی | حجم (KB) | درصد استفاده |
+| :--- | :--- | :--- |
+${sortedStats.map(s => `| ${s.lang} | ${(s.size / 1024).toFixed(1)} KB | ${s.percent}% |`).join('\n')}
+`;
+      }
+
+      // Calculate Progress Steps
+      // Adding weight for indexing phase
+      const indexingWeight = 20; // 20% of progress
       let totalSteps = 0;
-      if (docLevels.code) totalSteps += sourceFiles.length; // Step 1: Code Analysis
-      if (docLevels.arch) totalSteps += 1; // Step 2: Arch
-      if (docLevels.sequence) totalSteps += 1; // Step 3: Sequence
-      if (docLevels.ops) totalSteps += 1; // Step 4: Ops
-      if (docLevels.root) totalSteps += 1; // Step 5: Root (Summary)
+      if (docLevels.code) totalSteps += sourceFiles.length; 
+      if (docLevels.arch) totalSteps += 1; 
+      if (docLevels.sequence) totalSteps += 1; 
+      if (docLevels.ops) totalSteps += 1; 
+      if (docLevels.api) totalSteps += 1; 
+      if (docLevels.root) totalSteps += 1; 
       
       let completedSteps = 0;
-      const updateProgress = () => {
-        completedSteps++;
-        const percent = Math.min(Math.round((completedSteps / totalSteps) * 100), 100);
-        setProgress(percent);
+      const updateProgress = (extra: number = 0) => {
+        const analysisProgress = Math.min(Math.round((completedSteps / totalSteps) * 80), 80); // 80% max for analysis
+        setProgress(analysisProgress + extra);
       };
 
-      // --- Variables to hold parts of documentation ---
-      // We use these to assemble the final doc in the correct order (Root -> Arch -> Seq -> Ops -> Code)
-      // even if we generate them in a different order (Code Analysis first).
+      // Doc parts
       let partRoot = '';
       let partArch = '';
       let partOps = '';
       let partSeq = '';
+      let partApi = '';
       let partCode = '';
 
+      // --- Assemble Document Function ---
       const assembleDoc = () => {
           let doc = `# مستندات جامع پروژه\n\nتولید شده توسط RepoDocs AI\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+          if (statsMarkdown) doc += `## 📊 آمار و تکنولوژی‌های پروژه\n\n${statsMarkdown}\n\n---\n\n`;
           if (partRoot) doc += `${partRoot}\n\n---\n\n`;
           if (partArch) doc += `## 🏗 معماری سیستم\n\n${partArch}\n\n---\n\n`;
-          if (partSeq) doc += `## 🔄 نمودار توالی فرآیندها (Sequence Diagram)\n\n${partSeq}\n\n---\n\n`;
+          if (partSeq) doc += `## 🔄 نمودار توالی (Sequence Diagram)\n\n${partSeq}\n\n---\n\n`;
+          if (partApi) doc += `## 🔌 مستندات API (OpenAPI)\n\n${partApi}\n\n---\n\n`;
           if (partOps) doc += `## 🚀 راهنمای عملیاتی و دیپلوی\n\n${partOps}\n\n---\n\n`;
           if (partCode) doc += `## 💻 مستندات کدها\n\n${partCode}`;
           return doc;
       };
 
-      // --- Prepare Initial Context ---
-      const fullSourceContext = sourceFiles.map(f => `\n--- SOURCE FILE: ${f.path} ---\n${f.content}`).join('\n');
-      
-      // Store code analysis results here to improve context for later steps
-      let analysisSummaries = '';
+      // =========================================================================================
+      // PHASE 1.5: RAG Indexing (Ingestion) - Gap 1 Solution
+      // =========================================================================================
+      addLog(`فاز ۲: ایندکس کردن برداری کدها (RAG) با مدل ${config.embeddingModel}...`, 'info');
+      await vectorStoreRef.current?.addDocuments(sourceFiles, (current, total) => {
+          const percentage = Math.round((current / total) * 20); // 0-20%
+          setProgress(percentage);
+      });
+      addLog('ایندکس‌سازی کدها تکمیل شد. چت هوشمند آماده است.', 'success');
+      setHasContext(true); // Now we have RAG context available
+
+      // --- Store Summaries for Map-Reduce ---
+      const fileSummaries: string[] = [];
 
       // =========================================================================================
-      // PHASE 1: Deep Code Analysis (Level 2)
-      // We run this FIRST to understand the code before drawing diagrams.
+      // PHASE 2: Code Analysis (Map Phase) - Level 2
       // =========================================================================================
       if (docLevels.code) {
-        addLog(`سطح ۲: تحلیل عمیق ${sourceFiles.length} فایل کد (جهت درک سیستم)...`, 'info');
+        addLog(`فاز ۳: تحلیل کدها (${sourceFiles.length} فایل) با استفاده از Map-Reduce...`, 'info');
         
         for (const file of sourceFiles) {
-          addLog(`در حال تحلیل ${file.path}...`, 'info');
-          const filePrompt = `File Path: ${file.path}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
-          const fileAnalysis = await generateCompletion(config, filePrompt, PROMPT_LEVEL_2_CODE);
+          // addLog(`در حال تحلیل ${file.path}...`, 'info'); // Too verbose
           
-          // Add to doc part
-          partCode += `<details>\n<summary><strong>📄 ${file.path}</strong></summary>\n\n${fileAnalysis}\n\n</details>\n\n`;
+          // Inject "Facts" (Metadata) into the prompt to reduce hallucinations (Gap 2)
+          const facts = [
+            file.metadata.classes.length > 0 ? `Classes found: ${file.metadata.classes.join(', ')}` : '',
+            file.metadata.functions.length > 0 ? `Functions/Methods found: ${file.metadata.functions.join(', ')}` : '',
+            file.metadata.hasApiPattern ? `Potentially contains API Endpoints` : ''
+          ].filter(Boolean).join('\n');
+
+          const filePrompt = `File Path: ${file.path}\n\nFACTS (Detected by Parser):\n${facts}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
           
-          // Add to context for next steps (Valuable!)
-          analysisSummaries += `\n>>> Analysis Summary for ${file.path}:\n${fileAnalysis}\n`;
+          const rawResponse = await generateCompletion(config, filePrompt, PROMPT_LEVEL_2_CODE);
+          
+          // Split response into Display Doc and Context Summary
+          const summarySplit = rawResponse.split('**SUMMARY_FOR_CONTEXT**');
+          const displayContent = summarySplit[0].trim();
+          const technicalSummary = summarySplit[1] ? summarySplit[1].trim() : "No summary provided.";
+
+          fileSummaries.push(`File: ${file.path}\nSummary: ${technicalSummary}\nDetected Metadata: ${JSON.stringify(file.metadata)}\n`);
+
+          const fileHeader = generateFileHeaderHTML(file.path, file.size);
+          partCode += `
+<details class="group bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden transition-all hover:shadow-md open:shadow-lg open:ring-1 open:ring-blue-100">
+<summary class="flex items-center justify-between p-4 cursor-pointer bg-slate-50/50 hover:bg-slate-50 transition-colors list-none select-none">
+${fileHeader}
+</summary>
+<div class="p-6 border-t border-slate-100 prose prose-slate max-w-none">
+\n${displayContent}\n
+</div>
+</details>
+\n`;
 
           setGeneratedDoc(assembleDoc());
-          updateProgress(); 
+          completedSteps++;
+          updateProgress(20); 
         }
       }
 
-      // Create enriched context with analysis results
-      const globalContextWithAnalysis = `Project File Tree:\n${fileTree}\n\nConfiguration Files:\n${configContents.join('')}\n\nSource Code Content:\n${fullSourceContext}\n\n${analysisSummaries ? `Expert Code Analysis Insights:\n${analysisSummaries}` : ''}`;
+      // --- REDUCE CONTEXT PREPARATION ---
+      // Instead of raw code, we use summaries + facts. Drastically reduces token usage.
+      const reducedContext = `
+CONTEXT FOR ARCHITECTURE & ROOT DOCS:
+Project File Tree:
+${fileTree}
 
+Configuration Files:
+${configContents.join('')}
+
+File Technical Summaries (Map-Reduce Output):
+${fileSummaries.join('\n----------------\n')}
+`;
 
       // =========================================================================================
-      // PHASE 2: Architecture (Level 3)
-      // Now uses the enriched context
+      // PHASE 3: High-Level Docs (Reduce Phase) - Level 3 & 5
       // =========================================================================================
+      
       if (docLevels.arch) {
-        addLog('سطح ۳: تحلیل معماری و سیستم (بر اساس تحلیل کدها)...', 'info');
-        const archPrompt = `${globalContextWithAnalysis}\n\nدستور اصلی: با توجه به کدها و تحلیل‌های انجام شده، یک دیاگرام معماری دقیق (Architecture Diagram) با فرمت Mermaid (flowchart TD) تولید کن که نشان دهد کامپوننت‌های کد (مثل توابع، کلاس‌ها و APIها) چگونه با هم در ارتباط هستند. حتما متن‌ها را در کوتیشن "..." بگذار.`;
-        const archContent = await generateCompletion(config, archPrompt, PROMPT_LEVEL_3_ARCH);
+        addLog('فاز ۴: تحلیل معماری (بر اساس خلاصه‌ها)...', 'info');
+        const archContent = await generateCompletion(config, reducedContext, PROMPT_LEVEL_3_ARCH);
         partArch = archContent;
         setGeneratedDoc(assembleDoc());
-        updateProgress();
+        completedSteps++;
+        updateProgress(20);
       }
 
-      // =========================================================================================
-      // PHASE 3: Sequence Diagram (Level 5)
-      // Now uses the enriched context
-      // =========================================================================================
       if (docLevels.sequence) {
-        addLog('سطح ۵: ترسیم نمودار توالی (Sequence Diagram)...', 'info');
-        const sequenceContext = `${globalContextWithAnalysis}\n\nدستور اصلی: بر اساس منطق موجود در کدها و تحلیل‌های انجام شده، سناریوی اصلی برنامه (مثلاً نحوه پردازش یک درخواست توسط کاربر) را استخراج کن و نمودار توالی (Sequence Diagram) آن را با فرمت Mermaid و زبان فارسی رسم کن. دقت کن که فقط sequenceDiagram مجاز است و متن‌ها باید در کوتیشن باشند.`;
-        const seqContent = await generateCompletion(config, sequenceContext, PROMPT_LEVEL_5_SEQUENCE);
+        addLog('فاز ۵: ترسیم نمودار توالی...', 'info');
+        const seqContent = await generateCompletion(config, reducedContext, PROMPT_LEVEL_5_SEQUENCE);
         partSeq = seqContent;
         setGeneratedDoc(assembleDoc());
-        updateProgress();
+        completedSteps++;
+        updateProgress(20);
       }
 
       // =========================================================================================
-      // PHASE 4: Operational (Level 4)
+      // PHASE 4: OpenAPI Generation (Level 6) - Gap 3 Solution
+      // =========================================================================================
+      if (docLevels.api) {
+        addLog('فاز ۶: تولید مستندات API (OpenAPI/Swagger)...', 'info');
+        
+        // Filter only relevant files for API generation to save tokens
+        const apiFiles = sourceFiles.filter(f => f.metadata.hasApiPattern || f.path.includes('routes') || f.path.includes('controller'));
+        
+        if (apiFiles.length === 0) {
+            partApi = "> هیچ الگوی API (مانند REST Controller یا Route) در پروژه یافت نشد.";
+        } else {
+            const apiContext = apiFiles.map(f => `File: ${f.path}\nExtracted Endpoints: ${f.metadata.apiEndpoints.join(', ')}\nContent:\n${f.content}`).join('\n\n');
+            const apiContent = await generateCompletion(config, apiContext, PROMPT_LEVEL_6_API);
+            
+            // Try to extract JSON block
+            const jsonMatch = apiContent.match(/```json([\s\S]*?)```/);
+            if (jsonMatch) {
+               partApi = `\n\`\`\`json\n${jsonMatch[1]}\n\`\`\`\n\n_برای مشاهده این مستندات، کد بالا را در [Swagger Editor](https://editor.swagger.io) کپی کنید._`;
+            } else {
+               partApi = apiContent;
+            }
+        }
+        setGeneratedDoc(assembleDoc());
+        completedSteps++;
+        updateProgress(20);
+      }
+
+      // =========================================================================================
+      // PHASE 5: Operational & Root
       // =========================================================================================
       if (docLevels.ops) {
-        addLog('سطح ۴: تولید مستندات عملیاتی (DevOps)...', 'info');
-        const opsPrompt = `Config Files:\n${configContents.join('\n')}\n\n(No source code provided, infer from configs)`;
+        addLog('فاز ۷: مستندات عملیاتی...', 'info');
+        const opsPrompt = `Config Files:\n${configContents.join('\n')}`;
         const opsContent = await generateCompletion(config, opsPrompt, PROMPT_LEVEL_4_OPS);
         partOps = opsContent;
         setGeneratedDoc(assembleDoc());
-        updateProgress();
+        completedSteps++;
+        updateProgress(20);
       }
 
-      // =========================================================================================
-      // PHASE 5: Root Documentation (Level 1)
-      // Done last to utilize full understanding for the "Introduction"
-      // =========================================================================================
       if (docLevels.root) {
-        addLog('سطح ۱: تولید مستندات ریشه (README)...', 'info');
-        const readmeContent = await generateCompletion(config, globalContextWithAnalysis, PROMPT_LEVEL_1_ROOT);
+        addLog('فاز نهایی: تولید README...', 'info');
+        const readmeContent = await generateCompletion(config, reducedContext, PROMPT_LEVEL_1_ROOT);
         partRoot = readmeContent;
         setGeneratedDoc(assembleDoc());
-        updateProgress();
+        completedSteps++;
+        updateProgress(20);
       }
 
-      addLog('تولید تمامی سطوح مستندات با موفقیت انجام شد!', 'success');
+      addLog('تمامی مراحل با موفقیت به پایان رسید.', 'success');
       setProgress(100);
-      updateChatContext(assembleDoc());
 
     } catch (error: any) {
       addLog(`خطا: ${error.message}`, 'error');
@@ -392,19 +483,39 @@ You are a dedicated Technical Assistant for the project described above.
     setIsChatLoading(true);
 
     try {
-      let messagesToSend = [...chatMessages, newUserMessage];
+      let contextContent = "";
       
-      if (hasContext) {
-        const lastMsgIndex = messagesToSend.length - 1;
-        messagesToSend[lastMsgIndex] = {
-          role: 'user',
-          content: `${userText}\n\n(IMPORTANT: Answer ONLY based on the PROJECT CONTEXT provided in the system prompt. Do not use outside knowledge.)`
-        };
+      // --- RAG RETRIEVAL ---
+      if (hasContext && vectorStoreRef.current) {
+         setIsRetrieving(true);
+         // Retrieve top 5 chunks relevant to the user query
+         const relevantDocs = await vectorStoreRef.current.similaritySearch(userText, 5);
+         
+         if (relevantDocs.length > 0) {
+           const chunksText = relevantDocs.map(d => `SOURCE: ${d.metadata.filePath}\n\`\`\`\n${d.content}\n\`\`\``).join('\n\n');
+           contextContent = `*** RETRIEVED PROJECT SOURCE CODE ***\n${chunksText}\n*** END SOURCE ***\n\n`;
+         }
+         setIsRetrieving(false);
       }
+
+      // Add System Prompt with RAG Context
+      const systemMessage: ChatMessage = { 
+         role: 'system', 
+         content: `You are an expert code assistant. 
+         ${contextContent ? `Use the following retrieved code snippets to answer the user's question:\n${contextContent}` : 'Answer based on your general knowledge.'}
+         
+         Rules:
+         1. Always answer in Persian (Farsi).
+         2. Be concise and technical.
+         3. If the answer is in the retrieved code, cite the file name.`
+      };
+
+      const messagesToSend = [systemMessage, ...chatMessages.filter(m => m.role !== 'system'), newUserMessage];
 
       const responseContent = await sendChatRequest(config, messagesToSend);
       setChatMessages(prev => [...prev, { role: 'assistant', content: responseContent }]);
     } catch (error) {
+      setIsRetrieving(false);
       setChatMessages(prev => [...prev, { role: 'assistant', content: '**خطا در برقراری ارتباط با مدل.** لطفا تنظیمات Ollama را بررسی کنید.' }]);
     } finally {
       setIsChatLoading(false);
@@ -431,6 +542,7 @@ You are a dedicated Technical Assistant for the project described above.
   const MarkdownRenderer = ({ content }: { content: string }) => (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
       components={{
         h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-slate-900 my-6 border-b-2 border-slate-100 pb-3" {...props} />,
         h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-slate-800 mt-8 mb-4 flex items-center gap-2" {...props} />,
@@ -508,9 +620,10 @@ You are a dedicated Technical Assistant for the project described above.
           </h2>
           <div className="space-y-3">
              {[
-               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل', color: 'slate' },
+               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + خلاصه سازی', color: 'slate' },
                { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', color: 'indigo' },
                { id: 'sequence', label: 'نمودار توالی', desc: 'سناریوی اصلی', color: 'purple' },
+               { id: 'api', label: 'مستندات API', desc: 'تولید OpenAPI Spec', color: 'emerald' }, // New Option
                { id: 'ops', label: 'عملیاتی (DevOps)', desc: 'دیپلوی و کانفیگ', color: 'pink' },
                { id: 'root', label: 'ریشه (README)', desc: 'معرفی و نصب', color: 'blue' }
              ].map((level) => (
@@ -567,7 +680,7 @@ You are a dedicated Technical Assistant for the project described above.
                />
              </div>
              <div>
-               <label className="text-xs font-bold text-slate-500 mb-2 block mr-1">مدل زبانی</label>
+               <label className="text-xs font-bold text-slate-500 mb-2 block mr-1">مدل تولید متن (Main)</label>
                <input 
                   type="text" 
                   list="model-suggestions"
@@ -577,11 +690,30 @@ You are a dedicated Technical Assistant for the project described above.
                   placeholder="e.g., qwen2.5-coder:14b"
                />
              </div>
+             <div>
+               <label className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1 mr-1">
+                 مدل Embedding (RAG)
+                 <span className="text-[10px] bg-blue-50 text-blue-500 px-1.5 rounded">New</span>
+               </label>
+               <input 
+                  type="text" 
+                  list="embed-suggestions"
+                  value={config.embeddingModel} 
+                  onChange={e => setConfig({...config, embeddingModel: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-700 text-sm dir-ltr text-left placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  placeholder="e.g., nomic-embed-text"
+               />
+             </div>
              <datalist id="model-suggestions">
                 <option value="qwen2.5-coder:14b" />
                 <option value="qwen2.5-coder:7b" />
                 <option value="llama3.1" />
                 <option value="gemma2:9b" />
+              </datalist>
+              <datalist id="embed-suggestions">
+                <option value="nomic-embed-text" />
+                <option value="mxbai-embed-large" />
+                <option value="snowflake-arctic-embed" />
               </datalist>
           </div>
         </div>
@@ -597,7 +729,7 @@ You are a dedicated Technical Assistant for the project described above.
                 : 'bg-slate-900 text-white shadow-slate-900/30'}`}
           >
             {isProcessing ? <Loader2 className="animate-spin" /> : <Play className="fill-current" />} 
-            {isProcessing ? 'در حال تحلیل...' : 'شروع آنالیز پروژه'}
+            {isProcessing ? 'در حال تحلیل...' : 'شروع آنالیز جامع'}
           </button>
 
           {(isProcessing || progress > 0) && (
@@ -671,8 +803,8 @@ You are a dedicated Technical Assistant for the project described above.
            
            {hasContext && (
              <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700 font-bold animate-in fade-in">
-                <Database className="w-3 h-3" />
-                محتوا بارگذاری شد
+                <BrainCircuit className="w-3 h-3" />
+                RAG Active
              </div>
            )}
         </div>
@@ -784,11 +916,13 @@ You are a dedicated Technical Assistant for the project described above.
                    </div>
                  ))
                )}
-               {isChatLoading && (
+               {(isChatLoading || isRetrieving) && (
                  <div className="flex justify-end">
                    <div className="bg-white border border-slate-100 rounded-[1.5rem] rounded-bl-none p-4 flex items-center gap-3 shadow-soft">
                      <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                     <span className="text-slate-500 text-sm font-medium">در حال تایپ...</span>
+                     <span className="text-slate-500 text-sm font-medium">
+                        {isRetrieving ? 'جستجو در پایگاه دانش (RAG)...' : 'در حال تایپ...'}
+                     </span>
                    </div>
                  </div>
                )}
@@ -803,13 +937,13 @@ You are a dedicated Technical Assistant for the project described above.
                    onKeyDown={handleKeyDown}
                    placeholder={hasContext ? "سوال خود را درباره پروژه بپرسید..." : "پیام خود را بنویسید..."}
                    className="w-full bg-slate-50 border-0 rounded-2xl p-4 pl-14 text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-100 resize-none h-16 max-h-32 text-sm leading-relaxed"
-                   disabled={isChatLoading}
+                   disabled={isChatLoading || isRetrieving}
                  />
                  <button
                    onClick={handleSendMessage}
-                   disabled={!chatInput.trim() || isChatLoading}
+                   disabled={!chatInput.trim() || isChatLoading || isRetrieving}
                    className={`absolute left-2 top-2 bottom-2 aspect-square rounded-xl transition-all flex items-center justify-center ${
-                     !chatInput.trim() || isChatLoading
+                     !chatInput.trim() || isChatLoading || isRetrieving
                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                      : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'
                    }`}
@@ -819,7 +953,7 @@ You are a dedicated Technical Assistant for the project described above.
                </div>
                <div className="text-[10px] text-slate-400 mt-3 text-center flex justify-center items-center gap-2 font-medium">
                  <span>Powered by Local LLM</span>
-                 {hasContext && <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Context Aware</span>}
+                 {hasContext && <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1"><Database className="w-3 h-3" /> RAG Enabled</span>}
                </div>
              </div>
            </div>

@@ -1,3 +1,4 @@
+
 import { OllamaConfig, ChatMessage } from '../types';
 
 export const checkOllamaConnection = async (config: OllamaConfig): Promise<boolean> => {
@@ -26,7 +27,11 @@ export const generateCompletion = async (
           { role: 'system', content: system },
           { role: 'user', content: prompt }
         ],
-        stream: false
+        stream: false,
+        options: {
+          temperature: 0.1, // Strict adherence to instructions
+          num_ctx: 8192     // Larger context window for analyzing code
+        }
       }),
     });
 
@@ -53,9 +58,13 @@ export const sendChatRequest = async (
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: config.model,
+        model: config.model, // For chat generation we use the main model
         messages: messages,
-        stream: false
+        stream: false,
+        options: {
+          temperature: 0.2,
+          num_ctx: 8192
+        }
       }),
     });
 
@@ -67,6 +76,40 @@ export const sendChatRequest = async (
     return data.message.content;
   } catch (error) {
     console.error("Ollama Chat Error:", error);
+    throw error;
+  }
+};
+
+// --- New RAG Method ---
+export const generateEmbeddings = async (
+  config: OllamaConfig,
+  prompt: string
+): Promise<number[]> => {
+  try {
+    const response = await fetch(`${config.baseUrl}/api/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: config.embeddingModel, // Use the lightweight embedding model
+        prompt: prompt,
+      }),
+    });
+
+    if (!response.ok) {
+       // Fallback: Try using the main model if embedding model fails, though not ideal
+       if (config.embeddingModel !== config.model) {
+           console.warn("Embedding model failed, retrying with main model...");
+           return generateEmbeddings({...config, embeddingModel: config.model}, prompt);
+       }
+       throw new Error(`Embedding API Error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.embedding;
+  } catch (error) {
+    console.error("Ollama Embedding Error:", error);
     throw error;
   }
 };

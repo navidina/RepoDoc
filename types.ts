@@ -1,3 +1,4 @@
+
 export interface FileNode {
   path: string;
   name: string;
@@ -15,6 +16,7 @@ export interface ProcessingLog {
 export interface OllamaConfig {
   baseUrl: string;
   model: string;
+  embeddingModel: string; // New: Specific model for RAG embeddings
 }
 
 export interface ChatMessage {
@@ -25,4 +27,27 @@ export interface ChatMessage {
 export enum AppMode {
   BROWSER = 'BROWSER',
   CLI_CODE = 'CLI_CODE'
+}
+
+// New Interface for Static Analysis (Gap 2 Solution)
+export interface FileMetadata {
+  path: string;
+  language: string;
+  classes: string[];
+  functions: string[];
+  imports: string[];
+  apiEndpoints: string[]; // e.g., "GET /users"
+  hasApiPattern: boolean;
+}
+
+// --- RAG Types ---
+export interface VectorDocument {
+  id: string;
+  content: string;
+  metadata: {
+    filePath: string;
+    startLine?: number;
+    endLine?: number;
+  };
+  embedding?: number[];
 }
