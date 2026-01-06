@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { File as FileIcon, Folder, Play, CheckCircle, AlertCircle, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, Link } from 'lucide-react';
 // @ts-ignore
@@ -27,11 +28,20 @@ const MermaidRenderer = ({ code }: { code: string }) => {
       .replace(/```/g, '')
       .trim();
     
+    // Remove "mermaid" word if it appears at the start (common LLM artifact)
+    if (fixed.toLowerCase().startsWith('mermaid')) {
+        fixed = fixed.substring(7).trim();
+    }
+    
+    // Fix: Ensure style command is lowercase
+    fixed = fixed.replace(/Style /g, 'style ');
+
     if (fixed.startsWith('graph ')) {
        fixed = fixed.replace('graph ', 'flowchart ');
     }
 
     if (fixed.includes('flowchart') || fixed.includes('graph')) {
+       // Quote labels containing parentheses to avoid syntax errors
        fixed = fixed.replace(/\[([^"\]\n]*\([^"\]\n]*\)[^"\]\n]*)\]/g, '["$1"]');
     }
 
@@ -44,6 +54,16 @@ const MermaidRenderer = ({ code }: { code: string }) => {
       try {
         setIsError(false);
         const cleanCode = fixMermaidSyntax(code);
+
+        // Safety check for plain text leaking in
+        if (!cleanCode.startsWith('sequenceDiagram') && 
+            !cleanCode.startsWith('classDiagram') && 
+            !cleanCode.startsWith('erDiagram') && 
+            !cleanCode.startsWith('flowchart') && 
+            !cleanCode.startsWith('gantt') &&
+            !cleanCode.startsWith('stateDiagram')) {
+           throw new Error('Invalid Mermaid code detected (No valid diagram type found).');
+        }
 
         mermaid.initialize({ 
           startOnLoad: false, 
@@ -121,8 +141,28 @@ const generateFileHeaderHTML = (path: string, size: number) => {
 
 // --- Helper: Extract Mermaid Code Block ---
 const extractMermaidCode = (response: string): string => {
+  // 1. Try to find strict markdown block
   const match = response.match(/```mermaid([\s\S]*?)```/);
-  return match ? `\`\`\`mermaid${match[1]}\`\`\`` : `\`\`\`mermaid\n${response}\n\`\`\``; // Fallback if no block found but implied
+  if (match) {
+    return `\`\`\`mermaid${match[1]}\`\`\``;
+  }
+
+  // 2. Fallback: Search for diagram keywords and extract until end or next block
+  const keywords = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'graph', 'gantt', 'stateDiagram'];
+  for (const keyword of keywords) {
+    // Regex to find keyword at start of line
+    const regex = new RegExp(`(^|\\n)${keyword}[\\s\\S]*`, 'i');
+    const keywordMatch = response.match(regex);
+    if (keywordMatch) {
+      let content = keywordMatch[0].trim();
+      // Clean up any trailing markdown ticks if the initial match missed them
+      content = content.replace(/```/g, '');
+      return `\`\`\`mermaid\n${content}\n\`\`\``;
+    }
+  }
+
+  // 3. Last Resort: Return error graph if purely text
+  return `\`\`\`mermaid\nflowchart TD;\nError["خطا در تولید دیاگرام"]\nstyle Error fill:#ffcccc,stroke:#ff0000;\n\`\`\``;
 };
 
 const BrowserGenerator: React.FC = () => {
@@ -473,14 +513,20 @@ ${fileSummaries.join('\n----------------\n')}
 
       if (docLevels.erd) {
         addLog('فاز ۵: ترسیم نمودار دیتابیس (ERD)...', 'info');
-        const dbFiles = sourceFiles.filter(f => f.metadata.isDbSchema || f.path.includes('entity') || f.path.includes('model'));
+        const dbFiles = sourceFiles.filter(f => f.metadata.isDbSchema || f.path.includes('entity') || f.path.includes('model') || f.path.includes('schema'));
+        
+        // Always try to generate ERD if we have database files, OR if we have the file summaries (fallback to summaries)
+        let erdContext = "";
         if (dbFiles.length > 0) {
-            const dbContext = dbFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n');
-            const erdContent = await generateCompletion(config, dbContext, PROMPT_LEVEL_7_ERD);
-            partErd = extractMermaidCode(erdContent);
+             erdContext = dbFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n');
         } else {
-            partErd = "> فایل مشخصی برای اسکیما دیتابیس پیدا نشد.";
+             // Fallback: Use summaries if no direct DB files found, maybe the models are inferred
+             erdContext = `No explicit schema files found. Infer schema from these summaries:\n${fileSummaries.filter(s => s.toLowerCase().includes('database') || s.toLowerCase().includes('model')).join('\n')}`;
         }
+        
+        const erdContent = await generateCompletion(config, erdContext, PROMPT_LEVEL_7_ERD);
+        partErd = extractMermaidCode(erdContent);
+        
         setGeneratedDoc(assembleDoc());
         completedSteps++;
         updateProgress(20);
@@ -502,13 +548,15 @@ ${fileSummaries.join('\n----------------\n')}
       if (docLevels.infra) {
         addLog('فاز ۷: ترسیم نمودار زیرساخت (Docker/Cloud)...', 'info');
         const infraFiles = sourceFiles.filter(f => f.metadata.isInfra || CONFIG_FILES.has(f.path.split('/').pop() || ''));
+        let infraContext = "";
         if (infraFiles.length > 0) {
-            const infraContext = infraFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n');
-            const infraContent = await generateCompletion(config, infraContext, PROMPT_LEVEL_9_INFRA);
-            partInfra = extractMermaidCode(infraContent);
+            infraContext = infraFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n');
         } else {
-            partInfra = "> فایل‌های زیرساخت پیدا نشد.";
+             infraContext = reducedContext; // Fallback to general context
         }
+        const infraContent = await generateCompletion(config, infraContext, PROMPT_LEVEL_9_INFRA);
+        partInfra = extractMermaidCode(infraContent);
+        
         setGeneratedDoc(assembleDoc());
         completedSteps++;
         updateProgress(20);

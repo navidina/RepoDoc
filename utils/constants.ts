@@ -140,21 +140,21 @@ export const PROMPT_LEVEL_4_OPS = `شما مهندس DevOps هستید.
 `;
 
 // --- Level 5: Sequence Diagram (Strict Mode) ---
-export const PROMPT_LEVEL_5_SEQUENCE = `You are a Diagram Generator.
-Task: Generate a MermaidJS Sequence Diagram based on the provided project summary.
+export const PROMPT_LEVEL_5_SEQUENCE = `You are a strict code generator.
+Task: Generate a MermaidJS Sequence Diagram based on the summary.
 
 CRITICAL RULES:
-1. Output **ONLY** the valid Mermaid code block.
+1. RETURN ONLY THE CODE BLOCK. NO conversational text, NO intro, NO outro.
 2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Do **NOT** write any introduction, explanation, or summary text.
-4. Use "sequenceDiagram".
-5. Use Persian labels for messages if possible, inside double quotes.
+3. Use "sequenceDiagram".
+4. Use Persian labels for messages inside double quotes.
+5. Do not use special characters in participant aliases.
 
-Example:
+Example Output:
 \`\`\`mermaid
 sequenceDiagram
-    User->>System: "درخواست ورود"
-    System-->>User: "تایید"
+    User->>System: "درخواست"
+    System-->>User: "پاسخ"
 \`\`\`
 `;
 
@@ -169,40 +169,57 @@ Rules:
 `;
 
 // --- Level 7: ERD (Entity Relationship Diagram) ---
-export const PROMPT_LEVEL_7_ERD = `You are a Diagram Generator.
-Task: Generate a MermaidJS ER Diagram based on the provided schema files.
+export const PROMPT_LEVEL_7_ERD = `You are a strict code generator.
+Task: Generate a MermaidJS ER Diagram (Entity Relationship) based on schema files.
 
 CRITICAL RULES:
-1. Output **ONLY** the valid Mermaid code block.
+1. RETURN ONLY THE CODE BLOCK. NO conversational text.
 2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Do **NOT** write any introduction.
-4. Use \`erDiagram\`.
+3. Use \`erDiagram\`.
+4. Define entities and relationships clearly.
 
-Example:
+Example Output:
 \`\`\`mermaid
 erDiagram
-    USER ||--o{ ORDER : has
+    USER ||--o{ POST : writes
 \`\`\`
 `;
 
 // --- Level 8: Class Diagram ---
-export const PROMPT_LEVEL_8_CLASS = `You are a Diagram Generator.
-Task: Generate a MermaidJS Class Diagram based on the extracted classes.
+export const PROMPT_LEVEL_8_CLASS = `You are a strict code generator.
+Task: Generate a MermaidJS Class Diagram based on the classes/interfaces found.
 
 CRITICAL RULES:
-1. Output **ONLY** the valid Mermaid code block.
+1. RETURN ONLY THE CODE BLOCK. NO conversational text.
 2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Do **NOT** write any introduction or summary text.
-4. Use \`classDiagram\`.
+3. Use \`classDiagram\`.
+4. Show relationships (inheritance, composition).
+5. Use simple alphanumeric names for classes.
+
+Example Output:
+\`\`\`mermaid
+classDiagram
+    class Animal
+    class Dog
+    Animal <|-- Dog
+\`\`\`
 `;
 
 // --- Level 9: Infrastructure Diagram ---
-export const PROMPT_LEVEL_9_INFRA = `You are a Diagram Generator.
-Task: Generate a MermaidJS Flowchart showing infrastructure components (Docker, Database, API).
+export const PROMPT_LEVEL_9_INFRA = `You are a strict code generator.
+Task: Generate a MermaidJS Flowchart showing infrastructure (Docker, Database, Cloud).
 
 CRITICAL RULES:
-1. Output **ONLY** the valid Mermaid code block.
+1. RETURN ONLY THE CODE BLOCK. NO conversational text.
 2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Do **NOT** write any text outside the code block.
-4. Use \`flowchart TD\`.
+3. Use \`flowchart TD\`.
+4. Use box shapes for components.
+5. WRAP ALL NODE LABELS IN QUOTES.
+
+Example Output:
+\`\`\`mermaid
+flowchart TD
+    Client["Client"] --> API["API Server"]
+    API --> DB[("Database")]
+\`\`\`
 `;
