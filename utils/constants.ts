@@ -147,8 +147,8 @@ CRITICAL RULES:
 1. RETURN ONLY THE CODE BLOCK. NO conversational text, NO intro, NO outro.
 2. Start with \`\`\`mermaid and end with \`\`\`.
 3. Use "sequenceDiagram".
-4. Use Persian labels for messages inside double quotes.
-5. Do not use special characters in participant aliases.
+4. CRITICAL: Use Persian labels for messages inside double quotes ONLY.
+5. Do NOT use special characters in participant aliases.
 
 Example Output:
 \`\`\`mermaid
@@ -177,11 +177,12 @@ CRITICAL RULES:
 2. Start with \`\`\`mermaid and end with \`\`\`.
 3. Use \`erDiagram\`.
 4. Define entities and relationships clearly.
+5. CRITICAL: ALL node labels or comments MUST be wrapped in double quotes.
 
 Example Output:
 \`\`\`mermaid
 erDiagram
-    USER ||--o{ POST : writes
+    USER ||--o{ POST : "writes"
 \`\`\`
 `;
 
@@ -194,7 +195,7 @@ CRITICAL RULES:
 2. Start with \`\`\`mermaid and end with \`\`\`.
 3. Use \`classDiagram\`.
 4. Show relationships (inheritance, composition).
-5. Use simple alphanumeric names for classes.
+5. Use simple alphanumeric names for classes (No spaces/special chars in IDs).
 
 Example Output:
 \`\`\`mermaid
@@ -214,12 +215,12 @@ CRITICAL RULES:
 2. Start with \`\`\`mermaid and end with \`\`\`.
 3. Use \`flowchart TD\`.
 4. Use box shapes for components.
-5. WRAP ALL NODE LABELS IN QUOTES.
+5. CRITICAL: ALL node labels MUST be wrapped in double quotes to prevent syntax errors.
 
 Example Output:
 \`\`\`mermaid
 flowchart TD
-    Client["Client"] --> API["API Server"]
+    Client["Client App"] --> API["API Server"]
     API --> DB[("Database")]
 \`\`\`
 `;
