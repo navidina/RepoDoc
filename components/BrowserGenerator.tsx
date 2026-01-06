@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity } from 'lucide-react';
+import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart } from 'lucide-react';
 import { OllamaConfig } from '../types';
 import { LocalVectorStore } from '../services/vectorStore';
 
@@ -84,20 +84,22 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     }
   };
 
-  // --- Creative Stats Widget ---
+  // --- Creative Stats Widget (Pie Chart) ---
   const StatsWidget = () => {
     if (!stats || stats.length === 0) return null;
 
     const totalLines = stats.reduce((acc, curr) => acc + curr.lines, 0);
+    const radius = 70;
+    const circumference = 2 * Math.PI * radius;
+    let accumulatedPercent = 0;
 
     return (
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-soft mb-8 relative overflow-hidden group">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-400 via-accent-pink to-brand-600"></div>
-        
+      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-soft mb-8 relative overflow-hidden">
+        {/* Title Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
            <div className="flex items-center gap-4">
              <div className="bg-brand-50 p-3 rounded-2xl text-brand-600 border border-brand-100">
-               <BarChart3 className="w-6 h-6" />
+               <PieChart className="w-6 h-6" />
              </div>
              <div>
                <h3 className="text-xl font-bold text-slate-800">تحلیل آماری پروژه</h3>
@@ -109,39 +111,57 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
              <span className="text-sm font-bold text-slate-700 dir-ltr">{totalLines.toLocaleString()} Lines</span>
            </div>
         </div>
-        
-        {/* Wave Graph Simulation using CSS */}
-        <div className="h-32 w-full bg-brand-50/50 rounded-3xl relative overflow-hidden flex items-end justify-between px-4 pb-0 mb-8 border border-brand-100/50">
-           {stats.map((stat, idx) => {
-              const height = Math.max(20, (stat.percent * 3)); // simple scale
-              return (
-                 <div key={idx} className="flex flex-col items-center gap-2 group/bar w-full">
-                     <div 
-                       className="w-full max-w-[40px] rounded-t-xl transition-all duration-1000 ease-out hover:opacity-90 relative"
-                       style={{ height: `${height}%`, backgroundColor: stat.color, opacity: 0.8 }}
-                     >
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap z-10">{stat.percent}%</div>
-                     </div>
-                 </div>
-              );
-           })}
-           {/* Decorative wave */}
-           <svg className="absolute bottom-0 left-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 1440 320" preserveAspectRatio="none">
-              <path fill="#7c3aed" fillOpacity="1" d="M0,224L48,213.3C96,203,192,181,288,181.3C384,181,480,203,576,224C672,245,768,267,864,250.7C960,235,1056,181,1152,165.3C1248,149,1344,171,1392,181.3L1440,192L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
-           </svg>
-        </div>
 
-        {/* Legend */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {stats.map((stat) => (
-            <div key={stat.lang} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors cursor-default">
-               <div className="w-3 h-3 rounded-full shadow-[0_0_10px] shadow-current" style={{ backgroundColor: stat.color, color: stat.color }} />
-               <div className="flex flex-col">
-                  <span className="text-xs font-bold text-slate-700">{stat.lang}</span>
-                  <span className="text-[10px] text-slate-400 dir-ltr">{stat.lines.toLocaleString()} LOC</span>
-               </div>
+        <div className="flex flex-col md:flex-row items-center justify-center gap-12">
+            {/* Donut Chart */}
+            <div className="relative w-64 h-64 flex items-center justify-center shrink-0">
+                <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
+                    {stats.map((stat, idx) => {
+                        const strokeDasharray = `${(stat.percent / 100) * circumference} ${circumference}`;
+                        const strokeDashoffset = -((accumulatedPercent / 100) * circumference);
+                        accumulatedPercent += stat.percent;
+
+                        return (
+                            <circle
+                                key={idx}
+                                cx="100"
+                                cy="100"
+                                r={radius}
+                                fill="transparent"
+                                stroke={stat.color}
+                                strokeWidth="25"
+                                strokeDasharray={strokeDasharray}
+                                strokeDashoffset={strokeDashoffset}
+                                className="transition-all duration-1000 ease-out hover:opacity-90"
+                            />
+                        );
+                    })}
+                </svg>
+                {/* Center Text */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                     <span className="text-3xl font-bold text-slate-700">{stats.length}</span>
+                     <span className="text-xs text-slate-400 font-medium uppercase">Languages</span>
+                </div>
             </div>
-          ))}
+
+            {/* Legend */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                {stats.map((stat) => (
+                    <div key={stat.lang} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 min-w-[140px]">
+                        <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: stat.color }} />
+                        <div className="flex flex-col flex-1">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-bold text-slate-700">{stat.lang}</span>
+                                <span className="text-[10px] font-bold text-slate-500">{stat.percent}%</span>
+                            </div>
+                            <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${stat.percent}%`, backgroundColor: stat.color }}></div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 mt-1 dir-ltr text-right">{stat.lines.toLocaleString()} LOC</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
       </div>
     );
@@ -437,11 +457,5 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     </div>
   );
 };
-
-const CheckIcon = () => (
-    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-    </svg>
-)
 
 export default BrowserGenerator;
