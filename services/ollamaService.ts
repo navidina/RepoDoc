@@ -1,4 +1,5 @@
 
+
 import { OllamaConfig, ChatMessage } from '../types';
 
 export const checkOllamaConnection = async (config: OllamaConfig): Promise<boolean> => {
@@ -30,7 +31,7 @@ export const generateCompletion = async (
         stream: false,
         options: {
           temperature: 0.1, // Strict adherence to instructions
-          num_ctx: 8192     // Larger context window for analyzing code
+          num_ctx: 16384    // Increased to 16k for deep analysis of large files
         }
       }),
     });
@@ -63,7 +64,7 @@ export const sendChatRequest = async (
         stream: false,
         options: {
           temperature: 0.2,
-          num_ctx: 8192
+          num_ctx: 16384 // Increased context for chat as well
         }
       }),
     });

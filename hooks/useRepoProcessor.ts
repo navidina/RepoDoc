@@ -196,7 +196,7 @@ export const useRepoProcessor = () => {
       let parts: any = { root: '', arch: '', ops: '', seq: '', api: '', erd: '', class: '', infra: '', code: '' };
 
       const assembleDoc = () => {
-          let doc = `# مستندات جامع پروژه\n\nتولید شده توسط RepoDocs AI\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+          let doc = `# مستندات جامع پروژه\n\nتولید شده توسط دستیار هوشمند رایان هم‌افزا\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
           if (statsMarkdown) doc += `## 📊 DNA پروژه (تحلیل استک)\n\n${statsMarkdown}\n\n---\n\n`;
           if (parts.root) doc += `${parts.root}\n\n---\n\n`;
           if (parts.arch) doc += `## 🏗 معماری سیستم\n\n${parts.arch}\n\n---\n\n`;
@@ -234,9 +234,13 @@ export const useRepoProcessor = () => {
 
           const filePrompt = `File Path: ${file.path}\n\nFACTS (Detected by Parser):\n${facts}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
           const rawResponse = await generateCompletion(config, filePrompt, PROMPT_LEVEL_2_CODE);
-          const summarySplit = rawResponse.split('**SUMMARY_FOR_CONTEXT**');
+          
+          // Improved Regex Splitting for robustness
+          const summarySplit = rawResponse.split(/\*\*SUMMARY_FOR_CONTEXT\*\*|---SUMMARY---/i);
           const displayContent = summarySplit[0].trim();
-          const technicalSummary = summarySplit[1] ? summarySplit[1].trim() : "No summary provided.";
+          const technicalSummary = summarySplit[1] 
+            ? summarySplit[1].trim() 
+            : "Technical summary not generated strictly.";
 
           fileSummaries.push(`File: ${file.path}\nSummary: ${technicalSummary}\nDetected Metadata: ${JSON.stringify(file.metadata)}\n`);
           const headerHTML = generateFileHeaderHTML(file.path, file.lines);

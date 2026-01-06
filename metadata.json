@@ -1,5 +1,5 @@
 {
-  "name": "RepoDocs AI",
+  "name": "Rayan HamAfza Docs",
   "description": "A dual-mode documentation generator: Run directly in the browser using local Ollama, or generate a Node.js CLI script for terminal usage.",
   "requestFramePermissions": []
 }

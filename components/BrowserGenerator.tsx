@@ -1,9 +1,8 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash } from 'lucide-react';
+import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity } from 'lucide-react';
 import { OllamaConfig } from '../types';
-import { DEFAULT_MODEL, OLLAMA_DEFAULT_URL } from '../utils/constants';
 import { LocalVectorStore } from '../services/vectorStore';
 
 // Custom Hooks
@@ -13,13 +12,12 @@ import { useChat } from '../hooks/useChat';
 // Components
 import MarkdownRenderer from './MarkdownRenderer';
 
-const BrowserGenerator: React.FC = () => {
-  // --- Configuration & Input State ---
-  const [config, setConfig] = useState<OllamaConfig>({
-    baseUrl: OLLAMA_DEFAULT_URL,
-    model: DEFAULT_MODEL,
-    embeddingModel: 'nomic-embed-text' 
-  });
+interface BrowserGeneratorProps {
+  config: OllamaConfig;
+}
+
+const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
+  // --- Input State ---
   const [inputType, setInputType] = useState<'local' | 'github'>('local');
   const [files, setFiles] = useState<FileList | null>(null);
   const [githubUrl, setGithubUrl] = useState('');
@@ -93,50 +91,55 @@ const BrowserGenerator: React.FC = () => {
     const totalLines = stats.reduce((acc, curr) => acc + curr.lines, 0);
 
     return (
-      <div className="bg-gradient-to-br from-white to-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
-        <div className="flex items-center justify-between mb-5">
-           <div className="flex items-center gap-2">
-             <div className="bg-indigo-100 p-2 rounded-xl text-indigo-600">
-               <BarChart3 className="w-5 h-5" />
+      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-soft mb-8 relative overflow-hidden group">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-400 via-accent-pink to-brand-600"></div>
+        
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
+           <div className="flex items-center gap-4">
+             <div className="bg-brand-50 p-3 rounded-2xl text-brand-600 border border-brand-100">
+               <BarChart3 className="w-6 h-6" />
              </div>
              <div>
-               <h3 className="text-lg font-bold text-slate-800">DNA پروژه</h3>
-               <p className="text-xs text-slate-500 font-medium tracking-wide">ترکیب زبان‌ها و خطوط کد</p>
+               <h3 className="text-xl font-bold text-slate-800">تحلیل آماری پروژه</h3>
+               <p className="text-sm text-slate-400 font-medium">پراکندگی زبان‌ها و حجم کد</p>
              </div>
            </div>
-           <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-             <Hash className="w-4 h-4 text-slate-500" />
-             <span className="text-xs font-bold text-slate-600 dir-ltr">{totalLines.toLocaleString()} LOC</span>
+           <div className="mt-4 md:mt-0 flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
+             <Hash className="w-4 h-4 text-slate-400" />
+             <span className="text-sm font-bold text-slate-700 dir-ltr">{totalLines.toLocaleString()} Lines</span>
            </div>
         </div>
         
-        {/* Creative Progress Bar */}
-        <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex mb-6 shadow-inner">
-          {stats.map((stat, idx) => (
-            <div 
-              key={stat.lang}
-              style={{ width: `${stat.percent}%`, backgroundColor: stat.color }}
-              className="h-full transition-all duration-1000 ease-out hover:opacity-80 relative group first:rounded-l-full last:rounded-r-full"
-              title={`${stat.lang}: ${stat.lines} lines`}
-            />
-          ))}
+        {/* Wave Graph Simulation using CSS */}
+        <div className="h-32 w-full bg-brand-50/50 rounded-3xl relative overflow-hidden flex items-end justify-between px-4 pb-0 mb-8 border border-brand-100/50">
+           {stats.map((stat, idx) => {
+              const height = Math.max(20, (stat.percent * 3)); // simple scale
+              return (
+                 <div key={idx} className="flex flex-col items-center gap-2 group/bar w-full">
+                     <div 
+                       className="w-full max-w-[40px] rounded-t-xl transition-all duration-1000 ease-out hover:opacity-90 relative"
+                       style={{ height: `${height}%`, backgroundColor: stat.color, opacity: 0.8 }}
+                     >
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap z-10">{stat.percent}%</div>
+                     </div>
+                 </div>
+              );
+           })}
+           {/* Decorative wave */}
+           <svg className="absolute bottom-0 left-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 1440 320" preserveAspectRatio="none">
+              <path fill="#7c3aed" fillOpacity="1" d="M0,224L48,213.3C96,203,192,181,288,181.3C384,181,480,203,576,224C672,245,768,267,864,250.7C960,235,1056,181,1152,165.3C1248,149,1344,171,1392,181.3L1440,192L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
+           </svg>
         </div>
 
-        {/* Stats Grid */}
+        {/* Legend */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat) => (
-            <div key={stat.lang} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow group">
-              <div className="flex items-center gap-2.5 overflow-hidden">
-                <div 
-                  className="w-3 h-3 rounded-full shrink-0 group-hover:scale-125 transition-transform" 
-                  style={{ backgroundColor: stat.color }}
-                />
-                <span className="font-bold text-sm text-slate-700 truncate">{stat.lang}</span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-slate-400 font-medium dir-ltr">{stat.lines.toLocaleString()} Lines</span>
-                <span className="text-xs font-bold text-slate-800 dir-ltr">{stat.percent}%</span>
-              </div>
+            <div key={stat.lang} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors cursor-default">
+               <div className="w-3 h-3 rounded-full shadow-[0_0_10px] shadow-current" style={{ backgroundColor: stat.color, color: stat.color }} />
+               <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-700">{stat.lang}</span>
+                  <span className="text-[10px] text-slate-400 dir-ltr">{stat.lines.toLocaleString()} LOC</span>
+               </div>
             </div>
           ))}
         </div>
@@ -145,48 +148,55 @@ const BrowserGenerator: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full">
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 h-full">
       {/* --- LEFT PANEL: Sidebar Controls --- */}
-      <div className="xl:col-span-4 flex flex-col gap-6 h-full overflow-y-auto pr-1">
+      <div className="xl:col-span-4 flex flex-col gap-8 h-full overflow-y-auto pr-1">
         
         {/* Source Selection Widget */}
-        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
-          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center justify-between">
-             <span className="flex items-center gap-3">
-               <div className="bg-blue-100 p-2 rounded-xl"><Folder className="w-5 h-5 text-blue-600" /></div>
-               انتخاب منبع کد
-             </span>
-             {files && inputType === 'local' && <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold">{files.length} فایل</span>}
+        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white relative overflow-hidden">
+           {/* Decorative bg blob */}
+           <div className="absolute -top-10 -right-10 w-32 h-32 bg-brand-100 rounded-full blur-3xl opacity-50"></div>
+           
+          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-3 relative z-10">
+               <div className="bg-brand-100 text-brand-600 p-2.5 rounded-xl shadow-sm"><Folder className="w-5 h-5" /></div>
+               منبع پروژه
+               {files && inputType === 'local' && <span className="mr-auto text-[10px] bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-bold shadow-sm">{files.length} فایل</span>}
           </h2>
           
-          <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-            <button onClick={() => setInputType('local')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${inputType === 'local' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+          <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1.5 rounded-2xl mb-6 border border-slate-100">
+            <button onClick={() => setInputType('local')} className={`flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-xl transition-all ${inputType === 'local' ? 'bg-white shadow-card text-brand-700' : 'text-slate-400 hover:text-slate-600'}`}>
                <Folder className="w-4 h-4" /> پوشه محلی
             </button>
-            <button onClick={() => setInputType('github')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${inputType === 'github' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+            <button onClick={() => setInputType('github')} className={`flex items-center justify-center gap-2 py-3 text-xs font-bold rounded-xl transition-all ${inputType === 'github' ? 'bg-white shadow-card text-brand-700' : 'text-slate-400 hover:text-slate-600'}`}>
                <Github className="w-4 h-4" /> گیت‌هاب
             </button>
           </div>
 
           {inputType === 'local' ? (
-            <div className="relative group">
+            <div className="relative group cursor-pointer">
               <input type="file" 
                 // @ts-ignore
-                webkitdirectory="" directory="" onChange={handleDirectorySelect} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" disabled={isProcessing} 
+                webkitdirectory="" directory="" onChange={handleDirectorySelect} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" disabled={isProcessing} 
               />
-              <div className={`border-2 border-dashed rounded-2xl p-8 transition-all text-center group-hover:border-blue-400 group-hover:bg-blue-50/50 ${files ? 'border-green-300 bg-green-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
-                <div className="bg-white p-3 rounded-full shadow-sm w-12 h-12 mx-auto flex items-center justify-center mb-3 text-blue-500 group-hover:scale-110 transition-transform"><Upload className="w-6 h-6" /></div>
-                <p className="text-sm font-bold text-slate-700 mb-1">{files ? 'پوشه انتخاب شد' : 'انتخاب پوشه کد'}</p>
-                <p className="text-xs text-slate-400">کلیک کنید یا درگ کنید</p>
+              <div className={`border-2 border-dashed rounded-3xl p-10 transition-all text-center group-hover:border-brand-300 group-hover:bg-brand-50/50 relative overflow-hidden ${files ? 'border-emerald-300 bg-emerald-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
+                 <div className="absolute inset-0 bg-grid-slate-200/20 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))]"></div>
+                <div className="bg-white p-4 rounded-2xl shadow-card w-16 h-16 mx-auto flex items-center justify-center mb-4 text-brand-500 group-hover:scale-110 transition-transform relative z-10">
+                    <Upload className="w-8 h-8" />
+                </div>
+                <p className="text-sm font-bold text-slate-700 mb-1 relative z-10">{files ? 'پوشه انتخاب شد' : 'انتخاب پوشه کد'}</p>
+                <p className="text-xs text-slate-400 relative z-10">کلیک کنید یا پوشه را اینجا رها کنید</p>
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="relative">
-                <Github className="absolute right-3 top-3 w-5 h-5 text-slate-400" />
-                <input type="text" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} placeholder="https://github.com/username/repo" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pr-10 text-slate-700 text-sm dir-ltr text-left outline-none focus:ring-2 focus:ring-blue-500" />
+            <div className="space-y-4">
+              <div className="relative group">
+                <Github className="absolute right-4 top-4 w-5 h-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
+                <input type="text" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} placeholder="username/repo" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pr-12 text-slate-700 text-sm dir-ltr text-left outline-none focus:ring-2 focus:ring-brand-200 transition-all shadow-inner" />
               </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed bg-blue-50 text-blue-600 p-2 rounded-lg"><Info className="w-3 h-3 inline ml-1" /> نکته: برای ریپازیتوری‌های عمومی، فایل‌های اصلی و کانفیگ دانلود و تحلیل می‌شوند.</p>
+              <div className="text-[10px] text-brand-600 bg-brand-50 p-3 rounded-xl border border-brand-100 flex items-start gap-2 leading-relaxed">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" /> 
+                  برای ریپازیتوری‌های عمومی، فایل‌های اصلی به صورت خودکار شناسایی می‌شوند.
+              </div>
             </div>
           )}
         </div>
@@ -194,32 +204,51 @@ const BrowserGenerator: React.FC = () => {
         {/* Levels Widget */}
         <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
           <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-3">
-             <div className="bg-purple-100 p-2 rounded-xl"><Layers className="w-5 h-5 text-purple-600" /></div>
+             <div className="bg-accent-pink/10 text-accent-pink p-2.5 rounded-xl shadow-sm"><Layers className="w-5 h-5" /></div>
              سطوح تحلیل و دیاگرام
           </h2>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3">
              {[
-               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + خلاصه', color: 'slate' },
-               { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', color: 'indigo' },
-               { id: 'erd', label: 'دیتابیس (ERD)', desc: 'مدل داده (Prisma/SQL)', color: 'blue' }, 
-               { id: 'classDiagram', label: 'نمودار کلاس', desc: 'تحلیل شی‌گرایی', color: 'orange' }, 
-               { id: 'infra', label: 'زیرساخت', desc: 'Docker / Terraform', color: 'cyan' }, 
-               { id: 'sequence', label: 'نمودار توالی', desc: 'سناریوی اصلی', color: 'purple' },
-               { id: 'api', label: 'مستندات API', desc: 'OpenAPI Spec', color: 'emerald' },
-               { id: 'ops', label: 'عملیاتی (DevOps)', desc: 'دیپلوی و کانفیگ', color: 'pink' },
-               { id: 'root', label: 'ریشه (README)', desc: 'معرفی و نصب', color: 'blue' }
+               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + خلاصه', icon: Code },
+               { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', icon: Layers },
+               { id: 'erd', label: 'دیتابیس (ERD)', desc: 'مدل داده (Prisma/SQL)', icon: Database },
+               { id: 'classDiagram', label: 'نمودار کلاس', desc: 'تحلیل شی‌گرایی', icon: Box },
+               { id: 'infra', label: 'زیرساخت', desc: 'Docker / Terraform', icon: Server },
+               { id: 'sequence', label: 'نمودار توالی', desc: 'سناریوی اصلی', icon: LayoutTemplate },
+               { id: 'api', label: 'مستندات API', desc: 'OpenAPI Spec', icon: Zap },
+               { id: 'ops', label: 'عملیاتی (DevOps)', desc: 'دیپلوی و کانفیگ', icon: Terminal },
+               { id: 'root', label: 'ریشه (README)', desc: 'معرفی و نصب', icon: FileIcon },
              ].map((level) => (
-                <label key={level.id} className={`flex items-center gap-4 p-3.5 rounded-2xl border cursor-pointer transition-all duration-300 group hover:shadow-md ${
+                <label key={level.id} className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all duration-300 group relative overflow-hidden ${
                   // @ts-ignore
-                  docLevels[level.id] ? 'bg-slate-900 border-slate-900 shadow-lg shadow-slate-900/10' : 'bg-white border-slate-100 hover:border-slate-300'
+                  docLevels[level.id] 
+                    ? 'bg-[#1E293B] border-slate-800 text-white shadow-lg shadow-slate-900/10 scale-[1.02]' 
+                    : 'bg-white border-slate-100 hover:border-brand-200 text-slate-600'
                 }`}>
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                  <div className="flex items-center gap-4 relative z-10">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                          // @ts-ignore
+                          docLevels[level.id] ? 'bg-white/10 text-white' : 'bg-slate-50 text-slate-400'
+                      }`}>
+                          <level.icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold">{level.label}</span>
+                        <span className={`text-[10px] ${
+                            // @ts-ignore
+                            docLevels[level.id] ? 'text-slate-300' : 'text-slate-400'
+                        }`}>{level.desc}</span>
+                      </div>
+                  </div>
+                  
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors relative z-10 ${
                     // @ts-ignore
-                    docLevels[level.id] ? 'border-white bg-transparent' : 'border-slate-300 bg-slate-50'
+                    docLevels[level.id] ? 'border-brand-400 bg-brand-500' : 'border-slate-200 bg-slate-50'
                   }`}>
                     {/* @ts-ignore */}
-                    {docLevels[level.id] && <div className="w-2 h-2 bg-white rounded-full" />}
+                    {docLevels[level.id] && <div className="w-2.5 h-2.5 bg-white rounded-full shadow-sm"></div>}
                   </div>
+
                   <input type="checkbox" 
                     // @ts-ignore
                     checked={docLevels[level.id]} 
@@ -227,117 +256,88 @@ const BrowserGenerator: React.FC = () => {
                     onChange={e => setDocLevels({...docLevels, [level.id]: e.target.checked})} 
                     className="hidden" 
                   />
-                  <div className="flex flex-col">
-                    <span className={`text-sm font-bold transition-colors ${
-                      // @ts-ignore
-                      docLevels[level.id] ? 'text-white' : 'text-slate-700'
-                    }`}>{level.label}</span>
-                    <span className={`text-[10px] transition-colors ${
-                      // @ts-ignore
-                      docLevels[level.id] ? 'text-slate-400' : 'text-slate-400'
-                    }`}>{level.desc}</span>
-                  </div>
                 </label>
              ))}
           </div>
         </div>
 
-        {/* LLM Config Widget */}
-        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
-          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-3">
-             <div className="bg-orange-100 p-2 rounded-xl"><Zap className="w-5 h-5 text-orange-600" /></div>
-             پیکربندی هوش مصنوعی
-          </h2>
-          <div className="space-y-4">
-             <div>
-               <label className="text-xs font-bold text-slate-500 mb-2 block mr-1">آدرس سرور Ollama</label>
-               <input type="text" value={config.baseUrl} onChange={e => setConfig({...config, baseUrl: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-700 text-sm dir-ltr text-left outline-none focus:ring-2 focus:ring-blue-500" placeholder="http://localhost:11434" />
-             </div>
-             <div>
-               <label className="text-xs font-bold text-slate-500 mb-2 block mr-1">مدل تولید متن (Main)</label>
-               <input type="text" list="model-suggestions" value={config.model} onChange={e => setConfig({...config, model: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-700 text-sm dir-ltr text-left outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., qwen2.5-coder:14b" />
-             </div>
-             <div>
-               <label className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1 mr-1">مدل Embedding (RAG)</label>
-               <input type="text" list="embed-suggestions" value={config.embeddingModel} onChange={e => setConfig({...config, embeddingModel: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-700 text-sm dir-ltr text-left outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., nomic-embed-text" />
-             </div>
-             <datalist id="model-suggestions">
-                <option value="qwen2.5-coder:14b" /><option value="qwen2.5-coder:7b" /><option value="llama3.1" /><option value="gemma2:9b" />
-              </datalist>
-              <datalist id="embed-suggestions">
-                <option value="nomic-embed-text" /><option value="mxbai-embed-large" /><option value="snowflake-arctic-embed" />
-              </datalist>
-          </div>
-        </div>
-
         {/* Action Button & Progress */}
-        <div>
-          <button onClick={handleStartProcessing} disabled={(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing} className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 active:scale-95 text-lg ${(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white shadow-slate-900/30'}`}>
-            {isProcessing ? <Loader2 className="animate-spin" /> : <Play className="fill-current" />} 
-            {isProcessing ? 'در حال تحلیل...' : 'شروع آنالیز جامع'}
+        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
+          <button onClick={handleStartProcessing} disabled={(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing} className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all text-lg relative overflow-hidden group ${(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-glow hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]'}`}>
+            {!(isProcessing) && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-2xl"></div>}
+            {isProcessing ? <Loader2 className="animate-spin" /> : <Sparkles className="fill-current" />} 
+            <span className="relative">{isProcessing ? 'در حال تحلیل هوشمند...' : 'شروع آنالیز'}</span>
           </button>
+
           {(isProcessing || progress > 0) && (
-            <div className="mt-6 bg-white p-4 rounded-2xl shadow-soft">
-              <div className="flex justify-between text-xs text-slate-500 mb-2 font-bold px-1"><span>پیشرفت کلی</span><span className="text-blue-600">{progress}%</span></div>
-              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500 ease-out relative" style={{ width: `${progress}%` }}><div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div></div></div>
+            <div className="mt-6">
+              <div className="flex justify-between text-xs text-slate-500 mb-2 font-bold px-1">
+                  <span>وضعیت پردازش</span>
+                  <span className="text-brand-600">{progress}%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden shadow-inner">
+                  <div className="bg-gradient-to-r from-brand-400 to-accent-pink h-full rounded-full transition-all duration-500 ease-out relative" style={{ width: `${progress}%` }}>
+                      <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div>
+                  </div>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Logs */}
-        <div className="flex-1 overflow-y-auto bg-slate-50 rounded-[2rem] p-5 border border-slate-100 font-sans text-xs min-h-[150px] shadow-inner-light">
-          <div className="text-slate-400 mb-3 font-bold sticky top-0 bg-slate-50 pb-2 border-b border-slate-200 flex items-center gap-2"><Info className="w-3 h-3" /> گزارش لحظه‌ای</div>
-          {logs.length === 0 && <span className="text-slate-400 italic pl-2">منتظر شروع عملیات...</span>}
-          <div className="space-y-2">
-            {logs.map((log, i) => (
-              <div key={i} className={`flex items-start gap-2 ${log.type === 'error' ? 'text-red-500' : log.type === 'success' ? 'text-emerald-600' : 'text-slate-600'}`}>
-                <span className="opacity-40 text-[10px] whitespace-nowrap dir-ltr font-sans bg-slate-200 px-1 rounded mt-0.5">{log.timestamp}</span><span className="leading-relaxed">{log.message}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* --- RIGHT PANEL: Content & Chat --- */}
-      <div className="xl:col-span-8 bg-white rounded-[2.5rem] shadow-soft border border-white flex flex-col h-full overflow-hidden relative">
-        <div className="flex items-center px-8 pt-8 pb-4 justify-between bg-white z-10">
-           <div className="flex bg-slate-100/80 p-1.5 rounded-2xl">
-            <button onClick={() => setActiveTab('docs')} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'docs' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}><FileIcon className="w-4 h-4" /> مستندات</button>
-            <button onClick={() => setActiveTab('chat')} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'chat' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}><MessageSquare className="w-4 h-4" /> چت هوشمند</button>
+      <div className="xl:col-span-8 bg-white rounded-[2.5rem] shadow-soft border border-white flex flex-col h-full overflow-hidden relative z-0">
+        
+        {/* Top Tab Bar */}
+        <div className="flex items-center px-8 pt-8 pb-4 justify-between bg-white z-10 border-b border-slate-100">
+           <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+            <button onClick={() => setActiveTab('docs')} className={`flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'docs' ? 'bg-white text-slate-900 shadow-card' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100/50'}`}><FileIcon className="w-4 h-4" /> مستندات</button>
+            <button onClick={() => setActiveTab('chat')} className={`flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'chat' ? 'bg-white text-brand-700 shadow-card' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100/50'}`}><MessageSquare className="w-4 h-4" /> چت هوشمند</button>
            </div>
-           {hasContext && (
-             <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700 font-bold animate-in fade-in"><BrainCircuit className="w-3 h-3" /> RAG Active</div>
-           )}
+           
+           {/* RAG Status Indicator */}
+           <div className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${hasContext ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-50 text-slate-300 border border-slate-100'}`}>
+              <BrainCircuit className="w-4 h-4" /> 
+              {hasContext ? 'RAG Connected' : 'No Context'}
+           </div>
         </div>
-        <div className="h-px bg-slate-100 mx-8"></div>
 
         {/* DOCS TAB */}
         {activeTab === 'docs' && (
           <>
-            <div className="flex flex-col sm:flex-row justify-between items-center px-8 py-4 gap-4 bg-white">
+            <div className="flex flex-col sm:flex-row justify-between items-center px-8 py-4 gap-4 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
                <div className="flex flex-wrap items-center gap-3 w-full justify-between">
                 <div className="flex gap-3">
                   <input type="file" accept=".md,.markdown" ref={importInputRef} className="hidden" onChange={handleImportMarkdown} />
-                  <button onClick={() => importInputRef.current?.click()} className="text-xs font-bold bg-white text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all border border-slate-200 shadow-sm"><Upload className="w-4 h-4" /> <span className="hidden sm:inline">ایمپورت</span></button>
-                  {generatedDoc && (<button onClick={downloadMarkdown} className="text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-slate-900/20"><Download className="w-4 h-4" /> <span className="hidden sm:inline">دانلود MD</span></button>)}
+                  <button onClick={() => importInputRef.current?.click()} className="text-xs font-bold bg-white text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all border border-slate-200 shadow-sm"><Upload className="w-4 h-4" /> <span className="hidden sm:inline">آپلود</span></button>
+                  {generatedDoc && (<button onClick={downloadMarkdown} className="text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-slate-900/20"><Download className="w-4 h-4" /> <span className="hidden sm:inline">ذخیره</span></button>)}
                 </div>
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                  <button onClick={() => setViewMode('preview')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'preview' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Eye className="w-3 h-3" /> نمایش</button>
-                  <button onClick={() => setViewMode('raw')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'raw' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Code className="w-3 h-3" /> کد</button>
+                  <button onClick={() => setViewMode('preview')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'preview' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Eye className="w-3 h-3" /> بصری</button>
+                  <button onClick={() => setViewMode('raw')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'raw' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Code className="w-3 h-3" /> کد</button>
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 bg-white px-8 pb-8 overflow-y-auto">
+            <div className="flex-1 bg-white px-8 pb-8 overflow-y-auto custom-scrollbar">
               {!generatedDoc ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4">
-                  <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center"><LayoutTemplate className="w-10 h-10" /></div>
-                  <span className="font-medium">پیش‌نمایش مستندات اینجا نمایش داده می‌شود...</span>
+                <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-6">
+                  <div className="relative">
+                     <div className="absolute inset-0 bg-brand-100 rounded-full blur-xl opacity-50"></div>
+                     <div className="w-32 h-32 bg-slate-50 rounded-[2rem] flex items-center justify-center shadow-card relative z-10 border border-slate-100">
+                        <LayoutTemplate className="w-12 h-12 text-brand-200" />
+                     </div>
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-lg font-bold text-slate-700">مستندات خالی است</h3>
+                    <p className="text-sm text-slate-400 mt-2">پروژه را انتخاب کنید و دکمه شروع را بزنید</p>
+                  </div>
                 </div>
               ) : viewMode === 'raw' ? (
-                <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap bg-slate-900 text-slate-300 p-6 rounded-2xl dir-ltr shadow-inner shadow-black/50">{generatedDoc}</pre>
+                <pre className="font-mono text-sm leading-loose whitespace-pre-wrap bg-[#1E293B] text-slate-300 p-8 rounded-3xl dir-ltr shadow-inner shadow-black/50 border border-slate-700">{generatedDoc}</pre>
               ) : (
-                <div className="prose prose-slate max-w-none dir-rtl">
+                <div className="prose prose-slate max-w-none dir-rtl prose-headings:font-bold prose-headings:text-slate-800 prose-p:text-slate-600 prose-pre:rounded-2xl prose-pre:shadow-lg prose-img:rounded-2xl">
                   {/* Creative Stats Widget Rendered Here */}
                   <StatsWidget />
                   <MarkdownRenderer content={generatedDoc} />
@@ -349,33 +349,87 @@ const BrowserGenerator: React.FC = () => {
 
         {/* CHAT TAB */}
         {activeTab === 'chat' && (
-           <div className="flex flex-col h-full bg-slate-50/50">
-             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6">
+           <div className="flex flex-col h-full bg-[#FAFAFC]">
+             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
                {chatMessages.filter(m => m.role !== 'system').length === 0 ? (
-                 <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-6 opacity-60">
-                    <div className="w-20 h-20 bg-white rounded-3xl shadow-soft flex items-center justify-center"><Bot className="w-10 h-10 text-slate-300" /></div>
-                    <div className="text-center"><p className="font-bold text-slate-600 text-lg">دستیار هوشمند پروژه</p><p className="text-sm mt-1">مدل فعال: <span className="font-mono text-blue-500 bg-blue-50 px-2 py-0.5 rounded">{config.model}</span></p></div>
+                 <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-8 opacity-70">
+                    <div className="w-24 h-24 bg-white rounded-[2rem] shadow-glow flex items-center justify-center border border-white"><Bot className="w-12 h-12 text-brand-500" /></div>
+                    <div className="text-center space-y-2">
+                        <p className="font-bold text-slate-700 text-xl">چت با کد بیس پروژه</p>
+                        <p className="text-sm bg-brand-50 text-brand-600 px-3 py-1 rounded-full inline-block font-mono border border-brand-100">{config.model}</p>
+                    </div>
                  </div>
                ) : (
                  chatMessages.filter(m => m.role !== 'system').map((msg, idx) => (
-                   <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                     <div className={`max-w-[85%] rounded-[1.5rem] p-5 shadow-sm ${msg.role === 'user' ? 'bg-slate-900 text-white rounded-br-none shadow-slate-900/10' : 'bg-white border border-slate-100 text-slate-700 rounded-bl-none shadow-soft'}`}>
-                       <div className="flex items-center gap-2 mb-3 opacity-70 text-xs pb-2 border-b border-white/10">{msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3 text-blue-500" />}<span className="font-bold">{msg.role === 'user' ? 'شما' : 'دستیار هوشمند'}</span></div>
-                       {msg.role === 'user' ? <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div> : <div className="prose prose-slate prose-sm max-w-none dir-rtl"><MarkdownRenderer content={msg.content} /></div>}
+                   <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                     <div className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                        {/* Avatar */}
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-slate-800 text-white' : 'bg-white text-brand-600 border border-brand-100'}`}>
+                            {msg.role === 'user' ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
+                        </div>
+                        
+                        {/* Bubble */}
+                        <div className={`p-6 rounded-[2rem] shadow-sm relative group transition-all ${
+                            msg.role === 'user' 
+                            ? 'bg-slate-800 text-white rounded-tr-none shadow-lg shadow-slate-900/20' 
+                            : 'bg-white border border-slate-100 text-slate-700 rounded-tl-none shadow-soft'
+                        }`}>
+                            <div className="prose prose-sm max-w-none dir-rtl leading-relaxed">
+                                {msg.role === 'user' ? msg.content : <MarkdownRenderer content={msg.content} />}
+                            </div>
+                        </div>
                      </div>
                    </div>
                  ))
                )}
                {(isChatLoading || isRetrieving) && (
-                 <div className="flex justify-end"><div className="bg-white border border-slate-100 rounded-[1.5rem] rounded-bl-none p-4 flex items-center gap-3 shadow-soft"><Loader2 className="w-4 h-4 animate-spin text-blue-500" /><span className="text-slate-500 text-sm font-medium">{isRetrieving ? 'جستجو در پایگاه دانش (RAG)...' : 'در حال تایپ...'}</span></div></div>
+                 <div className="flex justify-start w-full">
+                    <div className="flex gap-4 max-w-[85%]">
+                        <div className="w-10 h-10 rounded-2xl bg-white border border-brand-100 flex items-center justify-center shrink-0 shadow-sm"><Loader2 className="w-5 h-5 animate-spin text-brand-500" /></div>
+                        <div className="bg-white border border-slate-100 px-6 py-4 rounded-[2rem] rounded-tl-none shadow-soft flex items-center gap-3">
+                            <span className="flex gap-1">
+                                <span className="w-2 h-2 bg-brand-400 rounded-full animate-bounce"></span>
+                                <span className="w-2 h-2 bg-brand-400 rounded-full animate-bounce delay-100"></span>
+                                <span className="w-2 h-2 bg-brand-400 rounded-full animate-bounce delay-200"></span>
+                            </span>
+                            <span className="text-slate-500 text-xs font-bold">{isRetrieving ? 'جستجو در بردارها...' : 'نوشتن پاسخ...'}</span>
+                        </div>
+                    </div>
+                 </div>
                )}
              </div>
-             <div className="p-6 bg-white border-t border-slate-100">
-               <div className="relative shadow-soft rounded-2xl">
-                 <textarea value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={handleKeyDown} placeholder={hasContext ? "سوال خود را درباره پروژه بپرسید..." : "پیام خود را بنویسید..."} className="w-full bg-slate-50 border-0 rounded-2xl p-4 pl-14 text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-100 resize-none h-16 max-h-32 text-sm leading-relaxed" disabled={isChatLoading || isRetrieving} />
-                 <button onClick={handleSendMessage} disabled={!chatInput.trim() || isChatLoading || isRetrieving} className={`absolute left-2 top-2 bottom-2 aspect-square rounded-xl transition-all flex items-center justify-center ${!chatInput.trim() || isChatLoading || isRetrieving ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}><Send className="w-5 h-5 rotate-180" /></button>
+             
+             {/* Chat Input Area */}
+             <div className="p-6 bg-white border-t border-slate-100 z-20">
+               <div className="relative shadow-soft rounded-[2rem] bg-slate-50 border border-slate-200 focus-within:ring-2 focus-within:ring-brand-100 focus-within:border-brand-300 transition-all">
+                 <textarea 
+                    value={chatInput} 
+                    onChange={(e) => setChatInput(e.target.value)} 
+                    onKeyDown={handleKeyDown} 
+                    placeholder={hasContext ? "سوال فنی خود را بپرسید..." : "پیام..."} 
+                    className="w-full bg-transparent border-0 rounded-[2rem] p-5 pl-16 text-slate-800 placeholder-slate-400 focus:ring-0 resize-none h-20 max-h-32 text-sm leading-relaxed" 
+                    disabled={isChatLoading || isRetrieving} 
+                 />
+                 <button 
+                    onClick={handleSendMessage} 
+                    disabled={!chatInput.trim() || isChatLoading || isRetrieving} 
+                    className={`absolute left-3 top-3 bottom-3 aspect-square rounded-2xl transition-all flex items-center justify-center ${!chatInput.trim() || isChatLoading || isRetrieving ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-600/30 hover:scale-105 active:scale-95'}`}
+                 >
+                    <Send className="w-5 h-5 rotate-180 ml-1" />
+                 </button>
                </div>
-               <div className="text-[10px] text-slate-400 mt-3 text-center flex justify-center items-center gap-2 font-medium"><span>Powered by Local LLM</span>{hasContext && <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1"><Database className="w-3 h-3" /> RAG Enabled</span>}</div>
+               
+               <div className="flex justify-center items-center gap-4 mt-4 opacity-60">
+                  <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5">
+                      <Command className="w-3 h-3" />
+                      <span>Enter برای ارسال</span>
+                  </div>
+                  <div className="w-px h-3 bg-slate-300"></div>
+                  <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5">
+                      <Database className="w-3 h-3" />
+                      <span>Local RAG</span>
+                  </div>
+               </div>
              </div>
            </div>
         )}
@@ -383,5 +437,11 @@ const BrowserGenerator: React.FC = () => {
     </div>
   );
 };
+
+const CheckIcon = () => (
+    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+    </svg>
+)
 
 export default BrowserGenerator;

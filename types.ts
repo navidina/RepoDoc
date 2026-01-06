@@ -26,8 +26,8 @@ export interface ChatMessage {
 }
 
 export enum AppMode {
-  BROWSER = 'BROWSER',
-  CLI_CODE = 'CLI_CODE'
+  DASHBOARD = 'DASHBOARD',
+  SETTINGS = 'SETTINGS'
 }
 
 // New Interface for Static Analysis (Gap 2 Solution)

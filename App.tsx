@@ -1,83 +1,103 @@
 import React, { useState } from 'react';
-import { Terminal, Globe, Github, LayoutDashboard } from 'lucide-react';
+import { Settings, Github, Cpu, LayoutGrid, Sliders } from 'lucide-react';
 import BrowserGenerator from './components/BrowserGenerator';
-import CliCodeViewer from './components/CliCodeViewer';
-import { AppMode } from './types';
+import SettingsView from './components/SettingsView';
+import { AppMode, OllamaConfig } from './types';
+import { DEFAULT_MODEL, OLLAMA_DEFAULT_URL } from './utils/constants';
 
 const App: React.FC = () => {
-  const [mode, setMode] = useState<AppMode>(AppMode.BROWSER);
+  const [mode, setMode] = useState<AppMode>(AppMode.DASHBOARD);
+  
+  // Lifted Config State
+  const [config, setConfig] = useState<OllamaConfig>({
+    baseUrl: OLLAMA_DEFAULT_URL,
+    model: DEFAULT_MODEL,
+    embeddingModel: 'nomic-embed-text' 
+  });
 
   return (
-    <div className="min-h-screen flex flex-col font-sans bg-[#F0F2F5]">
-      {/* Header - Designed as a floating top bar */}
+    <div className="min-h-screen flex flex-col font-sans bg-[#F5F6FB] overflow-x-hidden">
+      {/* Background Decor - Subtle Orbs */}
+      <div className="fixed top-[-10%] right-[-5%] w-96 h-96 bg-brand-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+      <div className="fixed top-[-10%] left-[-5%] w-96 h-96 bg-accent-pink/20 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+
+      {/* Header */}
       <header className="sticky top-0 z-50 pt-4 px-6 pb-2">
-        <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-white/50 mx-auto max-w-[1600px] px-6 h-20 flex items-center justify-between">
+        <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-card border border-white/60 mx-auto max-w-[1600px] px-6 h-20 flex items-center justify-between">
+          
+          {/* Logo Section */}
           <div className="flex items-center gap-4">
-            <div className="bg-slate-900 p-2.5 rounded-xl shadow-lg shadow-slate-900/20">
-              <LayoutDashboard className="w-6 h-6 text-white" />
+            <div className="bg-gradient-to-br from-brand-600 to-brand-800 p-2.5 rounded-2xl shadow-lg shadow-brand-500/30 text-white">
+              <Cpu className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                STEINMANN <span className="text-slate-400 font-light">Docs</span>
+              <h1 className="text-xl font-bold tracking-tight text-slate-800 flex flex-col leading-none gap-1">
+                <span>RAYAN <span className="text-brand-600">HAMAFZA</span></span>
               </h1>
-              <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">Intelligent Repository Analysis</p>
+              <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase opacity-80">Intelligent Documentation</p>
             </div>
           </div>
           
-          <nav className="flex items-center bg-slate-100/50 rounded-2xl p-1.5 border border-slate-200/50">
+          {/* Navigation */}
+          <nav className="flex items-center bg-slate-100/50 p-1.5 rounded-2xl border border-white/50">
             <button
-              onClick={() => setMode(AppMode.BROWSER)}
+              onClick={() => setMode(AppMode.DASHBOARD)}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
-                mode === AppMode.BROWSER 
-                  ? 'bg-white text-slate-900 shadow-[0_2px_10px_-2px_rgba(0,0,0,0.1)]' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                mode === AppMode.DASHBOARD 
+                  ? 'bg-white text-brand-700 shadow-sm ring-1 ring-black/5' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
               }`}
             >
-              <Globe className="w-4 h-4" />
-              نسخه وب
+              <LayoutGrid className="w-4 h-4" />
+              داشبورد
             </button>
             <button
-              onClick={() => setMode(AppMode.CLI_CODE)}
+              onClick={() => setMode(AppMode.SETTINGS)}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
-                mode === AppMode.CLI_CODE 
-                  ? 'bg-white text-slate-900 shadow-[0_2px_10px_-2px_rgba(0,0,0,0.1)]' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                mode === AppMode.SETTINGS 
+                  ? 'bg-white text-brand-700 shadow-sm ring-1 ring-black/5' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
               }`}
             >
-              <Terminal className="w-4 h-4" />
-              نسخه CLI
+              <Settings className="w-4 h-4" />
+              تنظیمات
             </button>
           </nav>
 
+          {/* User/Social */}
           <div className="flex items-center gap-3">
-             <a href="https://github.com" target="_blank" rel="noreferrer" className="p-2.5 rounded-full bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 transition-all shadow-sm">
-                <Github className="w-5 h-5" />
+             <a href="https://github.com" target="_blank" rel="noreferrer" className="p-2.5 rounded-xl bg-white border border-slate-100 text-slate-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm group">
+                <Github className="w-5 h-5 group-hover:scale-110 transition-transform" />
              </a>
-             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md ring-2 ring-white flex items-center justify-center text-white font-bold text-sm">
-                AI
+             <div className="h-10 px-4 rounded-xl bg-gradient-to-r from-brand-500 to-accent-pink shadow-md shadow-brand-500/20 flex items-center justify-center text-white font-bold text-sm">
+                نسخه ۲.۰
              </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 px-6 py-6 overflow-hidden">
+      <main className="flex-1 px-6 py-6 overflow-hidden z-10">
         <div className="max-w-[1600px] mx-auto h-full">
-          {mode === AppMode.BROWSER ? (
-            <div className="h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {mode === AppMode.DASHBOARD ? (
+            <div className="h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="flex-1 min-h-0">
-                <BrowserGenerator />
+                <BrowserGenerator config={config} />
               </div>
             </div>
           ) : (
-             <div className="h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div className="mb-8 text-center">
-                <h2 className="text-3xl font-bold text-slate-900 mb-3">کد منبع CLI</h2>
-                <p className="text-slate-500 max-w-xl mx-auto">
-                  برای استفاده از این ابزار در خط فرمان، کدهای زیر را در فایل‌های مربوطه کپی کنید. این نسخه سبک و سریع است.
+             <div className="h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-700 flex flex-col items-center">
+               <div className="mb-8 text-center relative w-full">
+                 <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-64 h-32 bg-brand-500/10 blur-[80px] rounded-full -z-10"></div>
+                <h2 className="text-3xl font-extrabold text-slate-800 mb-2 tracking-tight flex items-center justify-center gap-3">
+                  <Sliders className="w-8 h-8 text-brand-600" />
+                  تنظیمات برنامه
+                </h2>
+                <p className="text-slate-500 max-w-xl mx-auto text-sm leading-relaxed">
+                  پیکربندی اتصال به هوش مصنوعی و مدل‌های پردازش
                 </p>
               </div>
-               <CliCodeViewer />
+               <SettingsView config={config} setConfig={setConfig} />
              </div>
           )}
         </div>

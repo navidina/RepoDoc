@@ -3,19 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RepoDocs AI - مستندات ساز هوشمند</title>
+    <title>دستیار مستندساز رایان هم‌افزا</title>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
+            colors: {
+              brand: {
+                50: '#f5f3ff',
+                100: '#ede9fe',
+                200: '#ddd6fe',
+                300: '#c4b5fd',
+                400: '#a78bfa',
+                500: '#8b5cf6', // Primary Purple
+                600: '#7c3aed', // Darker Purple
+                700: '#6d28d9',
+                800: '#5b21b6',
+                900: '#4c1d95',
+              },
+              accent: {
+                pink: '#F472B6',
+                orange: '#FB923C',
+                blue: '#38BDF8'
+              }
+            },
             fontFamily: {
               sans: ['Vazirmatn', 'sans-serif'],
             },
             boxShadow: {
-              'soft': '0 10px 40px -10px rgba(0,0,0,0.08)',
+              'soft': '0 4px 30px rgba(0, 0, 0, 0.05)',
+              'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.04)',
+              'glow': '0 0 20px rgba(124, 58, 237, 0.3)',
               'inner-light': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+            },
+            borderRadius: {
+              '3xl': '1.5rem',
+              '4xl': '2rem',
             }
           },
         },
@@ -24,42 +49,45 @@
     <style>
       body {
         font-family: 'Vazirmatn', sans-serif;
+        background-color: #F5F6FB; /* Light Gray/Purple tint background */
       }
-      /* Custom Scrollbar for the dashboard look */
+      /* Custom Scrollbar */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f5f9; 
-        border-radius: 4px;
+        background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
         background: #cbd5e1; 
-        border-radius: 4px;
+        border-radius: 10px;
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8; 
       }
+      
       /* Markdown details/summary styling */
       details {
-        border: 1px solid #e2e8f0;
-        border-radius: 0.75rem;
+        border: 1px solid #f3f4f6;
+        border-radius: 1rem;
         background-color: white;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
         overflow: hidden;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
       }
       summary {
-        background-color: #f8fafc;
+        background-color: #fafafa;
         cursor: pointer;
         user-select: none;
-        padding: 0; /* Remove default padding to let inner flexbox handle it */
+        padding: 0; 
+        transition: background-color 0.2s;
       }
       summary:hover {
-        background-color: #f1f5f9;
+        background-color: #f3f4f6;
       }
       details[open] summary {
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid #f3f4f6;
       }
       
       /* New File Header Styling */
@@ -67,7 +95,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        direction: ltr; /* Force LTR for file paths */
+        direction: ltr; 
         width: 100%;
         padding: 1rem;
         box-sizing: border-box;
@@ -75,15 +103,24 @@
       .file-info-group {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
         overflow: hidden;
       }
       .file-icon {
         flex-shrink: 0;
+        background: #ede9fe;
+        color: #7c3aed;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        font-size: 14px;
       }
       .file-name {
         font-weight: 700;
-        color: #1e293b;
+        color: #334155;
         font-family: monospace;
       }
       .file-path {
@@ -92,16 +129,16 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 300px; /* Adjust based on needs */
+        max-width: 300px;
       }
       .file-size {
         color: #64748b;
         font-size: 0.75em;
         font-family: monospace;
         flex-shrink: 0;
-        background: #e2e8f0;
-        padding: 2px 6px;
-        border-radius: 4px;
+        background: #f1f5f9;
+        padding: 4px 8px;
+        border-radius: 6px;
         margin-left: 10px;
       }
     </style>
@@ -120,7 +157,7 @@
 }
 </script>
 </head>
-  <body class="bg-[#F0F2F5] text-slate-800 antialiased font-sans">
+  <body class="text-slate-800 antialiased font-sans">
     <div id="root"></div>
   </body>
 </html>
