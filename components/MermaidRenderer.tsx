@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { AlertCircle, Loader2, ZoomIn, ZoomOut, RefreshCcw, Maximize } from 'lucide-react';
 // @ts-ignore
 import mermaid from 'https://esm.sh/mermaid@10.9.0';
 
@@ -8,46 +8,68 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   const [svg, setSvg] = useState('');
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  
+  // Zoom & Pan State
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Handlers
+  const handleZoomIn = () => setScale(s => Math.min(s + 0.2, 5));
+  const handleZoomOut = () => setScale(s => Math.max(s - 0.2, 0.4));
+  const handleReset = () => { setScale(1); setPosition({ x: 0, y: 0 }); };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+
+  // Wheel zoom support (optional, requires ctrl key to not hijack scroll)
+  const handleWheel = (e: React.WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setScale(s => Math.min(Math.max(s + delta, 0.4), 5));
+      }
+  };
 
   const fixMermaidSyntax = (rawCode: string) => {
-    // 1. Strip Markdown wrappers
     let fixed = rawCode
       .replace(/```mermaid/gi, '')
       .replace(/```/g, '')
       .trim();
     
-    // 2. Remove any "mermaid" keyword if it appears again at the start
     if (fixed.toLowerCase().startsWith('mermaid')) {
         fixed = fixed.substring(7).trim();
     }
-
-    // 3. Remove common Markdown headers that might have snuck in (e.g., # Class Diagram)
     fixed = fixed.replace(/^#+.*$/gm, '');
-
-    // 4. Fix Unquoted Labels with Parentheses: Node[Label(text)] -> Node["Label(text)"]
-    // This regex looks for [text] where text contains () and is NOT already quoted.
     fixed = fixed.replace(/\[(?![ "])(.*?\(.*?\).*?)(?<![" ])\]/g, '["$1"]');
-
-    // 5. Fix Unquoted Labels with Spaces: Node[Label Text] -> Node["Label Text"]
-    // This is aggressive but helps with "Infrastructure" diagrams
-    // It looks for content inside [] that has spaces but no quotes.
     fixed = fixed.replace(/\[(?![ "])(.*\s+.*)(?<![" ])\]/g, '["$1"]');
-
-    // 6. Normalize keywords
     fixed = fixed.replace(/Style /g, 'style ');
     if (fixed.startsWith('graph ')) {
        fixed = fixed.replace('graph ', 'flowchart ');
     }
-
-    // 7. Remove any leading conversational text that extraction missed (Last Resort)
-    // If code doesn't start with a known keyword, try to find it.
     const keywords = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram'];
     const startIdx = keywords.findIndex(k => fixed.includes(k));
     if (startIdx !== -1 && !keywords.some(k => fixed.startsWith(k))) {
        const keyword = keywords[startIdx];
        fixed = fixed.substring(fixed.indexOf(keyword));
     }
-
     return fixed.trim();
   };
 
@@ -64,12 +86,9 @@ const MermaidRenderer = ({ code }: { code: string }) => {
 
         const cleanCode = fixMermaidSyntax(code);
 
-        // Validation Check
         const validStarts = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram', 'pie', 'gitGraph'];
         if (!validStarts.some(start => cleanCode.startsWith(start))) {
-           // Fallback: If no start found, assume flowchart if it looks like arrows
            if (cleanCode.includes('-->') || cleanCode.includes('---')) {
-               // It's likely a flowchart missing the header
                mermaid.initialize({ startOnLoad: false });
                const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
                const { svg } = await mermaid.render(id, `flowchart TD\n${cleanCode}`);
@@ -133,8 +152,42 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   }
 
   return (
-    <div className="bg-white rounded-2xl p-6 my-6 overflow-x-auto shadow-soft text-center border border-slate-100" dir="ltr">
-       <div dangerouslySetInnerHTML={{ __html: svg }} />
+    <div className="relative group my-8">
+      <div 
+        className="bg-slate-50 rounded-2xl overflow-hidden shadow-soft border border-slate-200 select-none relative" 
+        dir="ltr"
+        style={{ height: '500px' }} // Fixed height for consistent viewport
+      >
+         {/* Toolbar */}
+         <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5 bg-white/90 backdrop-blur p-1.5 rounded-xl shadow-sm border border-slate-200 transition-opacity opacity-0 group-hover:opacity-100">
+            <button onClick={handleZoomIn} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="بزرگنمایی"><ZoomIn className="w-4 h-4" /></button>
+            <button onClick={handleZoomOut} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="کوچک‌نمایی"><ZoomOut className="w-4 h-4" /></button>
+            <button onClick={handleReset} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="بازنشانی"><RefreshCcw className="w-4 h-4" /></button>
+         </div>
+
+         {/* Canvas */}
+         <div 
+           ref={containerRef}
+           className={`w-full h-full flex items-center justify-center overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+           onMouseDown={handleMouseDown}
+           onMouseMove={handleMouseMove}
+           onMouseUp={handleMouseUp}
+           onMouseLeave={handleMouseUp}
+           onWheel={handleWheel}
+         >
+            <div 
+              style={{ 
+                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                transformOrigin: 'center center'
+              }}
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
+         </div>
+      </div>
+      <div className="text-center text-[10px] text-slate-400 mt-2 font-medium">
+         برای جابجایی کلیک کنید و بکشید • بزرگنمایی با دکمه‌ها یا Ctrl + Scroll
+      </div>
     </div>
   );
 };
