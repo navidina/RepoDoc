@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import mermaid from 'mermaid';
+// @ts-ignore
+import mermaid from 'https://esm.sh/mermaid@10.9.0';
 
 const MermaidRenderer = ({ code }: { code: string }) => {
   const [svg, setSvg] = useState('');
@@ -9,22 +10,45 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const fixMermaidSyntax = (rawCode: string) => {
+    // 1. Strip Markdown wrappers
     let fixed = rawCode
-      .replace(/```mermaid/g, '')
+      .replace(/```mermaid/gi, '')
       .replace(/```/g, '')
       .trim();
     
+    // 2. Remove any "mermaid" keyword if it appears again at the start
     if (fixed.toLowerCase().startsWith('mermaid')) {
         fixed = fixed.substring(7).trim();
     }
-    
-    fixed = fixed.replace(/Style /g, 'style ');
 
+    // 3. Remove common Markdown headers that might have snuck in (e.g., # Class Diagram)
+    fixed = fixed.replace(/^#+.*$/gm, '');
+
+    // 4. Fix Unquoted Labels with Parentheses: Node[Label(text)] -> Node["Label(text)"]
+    // This regex looks for [text] where text contains () and is NOT already quoted.
+    fixed = fixed.replace(/\[(?![ "])(.*?\(.*?\).*?)(?<![" ])\]/g, '["$1"]');
+
+    // 5. Fix Unquoted Labels with Spaces: Node[Label Text] -> Node["Label Text"]
+    // This is aggressive but helps with "Infrastructure" diagrams
+    // It looks for content inside [] that has spaces but no quotes.
+    fixed = fixed.replace(/\[(?![ "])(.*\s+.*)(?<![" ])\]/g, '["$1"]');
+
+    // 6. Normalize keywords
+    fixed = fixed.replace(/Style /g, 'style ');
     if (fixed.startsWith('graph ')) {
        fixed = fixed.replace('graph ', 'flowchart ');
     }
 
-    return fixed;
+    // 7. Remove any leading conversational text that extraction missed (Last Resort)
+    // If code doesn't start with a known keyword, try to find it.
+    const keywords = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram'];
+    const startIdx = keywords.findIndex(k => fixed.includes(k));
+    if (startIdx !== -1 && !keywords.some(k => fixed.startsWith(k))) {
+       const keyword = keywords[startIdx];
+       fixed = fixed.substring(fixed.indexOf(keyword));
+    }
+
+    return fixed.trim();
   };
 
   useEffect(() => {
@@ -40,12 +64,18 @@ const MermaidRenderer = ({ code }: { code: string }) => {
 
         const cleanCode = fixMermaidSyntax(code);
 
-        if (!cleanCode.startsWith('sequenceDiagram') && 
-            !cleanCode.startsWith('classDiagram') && 
-            !cleanCode.startsWith('erDiagram') && 
-            !cleanCode.startsWith('flowchart') && 
-            !cleanCode.startsWith('gantt') &&
-            !cleanCode.startsWith('stateDiagram')) {
+        // Validation Check
+        const validStarts = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram', 'pie', 'gitGraph'];
+        if (!validStarts.some(start => cleanCode.startsWith(start))) {
+           // Fallback: If no start found, assume flowchart if it looks like arrows
+           if (cleanCode.includes('-->') || cleanCode.includes('---')) {
+               // It's likely a flowchart missing the header
+               mermaid.initialize({ startOnLoad: false });
+               const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
+               const { svg } = await mermaid.render(id, `flowchart TD\n${cleanCode}`);
+               if (isMounted) setSvg(svg);
+               return;
+           }
            throw new Error('Invalid Mermaid code detected (No valid diagram type found).');
         }
 

@@ -140,21 +140,27 @@ export const PROMPT_LEVEL_4_OPS = `شما مهندس DevOps هستید.
 `;
 
 // --- Level 5: Sequence Diagram (Strict Mode) ---
-export const PROMPT_LEVEL_5_SEQUENCE = `You are a strict code generator.
-Task: Generate a MermaidJS Sequence Diagram based on the summary.
+export const PROMPT_LEVEL_5_SEQUENCE = `STRICT MODE: ACTIVATED.
+ROLE: Text-to-MermaidJS Converter.
+INSTRUCTION: You are a machine that outputs ONLY code. You do NOT speak human language.
+
+TASK: Create a 'sequenceDiagram' based on the project overview.
 
 CRITICAL RULES:
-1. RETURN ONLY THE CODE BLOCK. NO conversational text, NO intro, NO outro.
-2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Use "sequenceDiagram".
-4. CRITICAL: Use Persian labels for messages inside double quotes ONLY.
-5. Do NOT use special characters in participant aliases.
+1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
+2. NO summaries. NO explanations. NO markdown headers.
+3. Syntax:
+   - Use "sequenceDiagram"
+   - Quote ALL labels: A->>B: "Message"
+   - Quote ALL participants: participant A as "Name"
 
 Example Output:
 \`\`\`mermaid
 sequenceDiagram
-    User->>System: "درخواست"
-    System-->>User: "پاسخ"
+    participant U as "User"
+    participant S as "Server"
+    U->>S: "Login"
+    S-->>U: "Success"
 \`\`\`
 `;
 
@@ -169,15 +175,18 @@ Rules:
 `;
 
 // --- Level 7: ERD (Entity Relationship Diagram) ---
-export const PROMPT_LEVEL_7_ERD = `You are a strict code generator.
-Task: Generate a MermaidJS ER Diagram (Entity Relationship) based on schema files.
+export const PROMPT_LEVEL_7_ERD = `STRICT MODE: ACTIVATED.
+ROLE: Text-to-MermaidJS Converter.
+
+TASK: Create an 'erDiagram'.
 
 CRITICAL RULES:
-1. RETURN ONLY THE CODE BLOCK. NO conversational text.
-2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Use \`erDiagram\`.
-4. Define entities and relationships clearly.
-5. CRITICAL: ALL node labels or comments MUST be wrapped in double quotes.
+1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
+2. NO summaries. NO explanations.
+3. Syntax:
+   - Use "erDiagram"
+   - Quote ALL labels: USER ||--o{ POST : "writes"
+   - PascalCase for entities (User, not user).
 
 Example Output:
 \`\`\`mermaid
@@ -187,40 +196,45 @@ erDiagram
 `;
 
 // --- Level 8: Class Diagram ---
-export const PROMPT_LEVEL_8_CLASS = `You are a strict code generator.
-Task: Generate a MermaidJS Class Diagram based on the classes/interfaces found.
+export const PROMPT_LEVEL_8_CLASS = `STRICT MODE: ACTIVATED.
+ROLE: Text-to-MermaidJS Converter.
+
+TASK: Create a 'classDiagram'.
 
 CRITICAL RULES:
-1. RETURN ONLY THE CODE BLOCK. NO conversational text.
-2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Use \`classDiagram\`.
-4. Show relationships (inheritance, composition).
-5. Use simple alphanumeric names for classes (No spaces/special chars in IDs).
+1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
+2. NO summaries. NO explanations.
+3. Syntax:
+   - Use "classDiagram"
+   - No spaces in class names.
 
 Example Output:
 \`\`\`mermaid
 classDiagram
-    class Animal
-    class Dog
-    Animal <|-- Dog
+    class User {
+      +String name
+    }
+    class Admin
+    User <|-- Admin
 \`\`\`
 `;
 
 // --- Level 9: Infrastructure Diagram ---
-export const PROMPT_LEVEL_9_INFRA = `You are a strict code generator.
-Task: Generate a MermaidJS Flowchart showing infrastructure (Docker, Database, Cloud).
+export const PROMPT_LEVEL_9_INFRA = `STRICT MODE: ACTIVATED.
+ROLE: Text-to-MermaidJS Converter.
+
+TASK: Create a 'flowchart TD'.
 
 CRITICAL RULES:
-1. RETURN ONLY THE CODE BLOCK. NO conversational text.
-2. Start with \`\`\`mermaid and end with \`\`\`.
-3. Use \`flowchart TD\`.
-4. Use box shapes for components.
-5. CRITICAL: ALL node labels MUST be wrapped in double quotes to prevent syntax errors.
+1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
+2. NO summaries. NO explanations.
+3. Syntax:
+   - Use "flowchart TD"
+   - Quote labels: A["My Label"]
 
 Example Output:
 \`\`\`mermaid
 flowchart TD
-    Client["Client App"] --> API["API Server"]
-    API --> DB[("Database")]
+    A["Client"] --> B["Server"]
 \`\`\`
 `;

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash } from 'lucide-react';
 import { OllamaConfig } from '../types';
@@ -133,7 +134,7 @@ const BrowserGenerator: React.FC = () => {
                 <span className="font-bold text-sm text-slate-700 truncate">{stat.lang}</span>
               </div>
               <div className="flex flex-col items-end">
-                <span className="text-[10px] text-slate-400 font-medium dir-ltr">{stat.lines.toLocaleString()}</span>
+                <span className="text-[10px] text-slate-400 font-medium dir-ltr">{stat.lines.toLocaleString()} Lines</span>
                 <span className="text-xs font-bold text-slate-800 dir-ltr">{stat.percent}%</span>
               </div>
             </div>

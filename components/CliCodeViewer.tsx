@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import { Copy, Check, Terminal } from 'lucide-react';
 
@@ -25,7 +27,8 @@ const CliCodeViewer: React.FC = () => {
   }
 }`;
 
-  const indexJsContent = `#!/usr/bin/env node
+  // We construct the large string carefully to avoid template literal hell
+  const part1 = `#!/usr/bin/env node
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -45,10 +48,6 @@ const CONFIG = {
   ]),
   maxFileSize: 20000 // characters
 };
-
-// ... (Rest of the CLI code remains the same for brevity, users copy the full logic)
-// See previous full implementation for logic details.
-// This is a viewer component.
 
 // --- System Prompts (Table-Based Structure) ---
 const PROMPTS = {
@@ -182,7 +181,10 @@ async function main() {
           continue;
         }
 
-        const content = await fs.readFile(filePath, 'utf-8');
+        const content = await fs.readFile(filePath, 'utf-8');`;
+
+  // This part is tricky because it contains backticks inside the generated code string
+  const part2 = `
         const filePrompt = \`File: \${relPath}\\n\\nCode:\\n\`\`\`\\n\${content}\\n\`\`\`\`;
         const analysis = await queryLLM(filePrompt, PROMPTS.code);
         
@@ -204,8 +206,9 @@ async function main() {
   }
 }
 
-main();
-`;
+main();`;
+
+  const indexJsContent = part1 + part2;
 
   const copyToClipboard = (text: string, setFn: (v: boolean) => void) => {
     navigator.clipboard.writeText(text);

@@ -60,5 +60,6 @@ export interface ProcessedFile {
   path: string;
   content: string;
   size: number;
+  lines: number;
   metadata: FileMetadata;
 }

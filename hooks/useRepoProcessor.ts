@@ -1,4 +1,5 @@
 
+
 import { useState } from 'react';
 import { OllamaConfig, ProcessingLog, ProcessedFile } from '../types';
 import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_6_API, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA } from '../utils/constants';
@@ -98,7 +99,7 @@ export const useRepoProcessor = () => {
                
                // Add to processing list
                const metadata = extractFileMetadata(content, filePath);
-               sourceFiles.push({ path: filePath, content, size: file.size, metadata });
+               sourceFiles.push({ path: filePath, content, size: file.size, lines, metadata });
             }
           }
       } else if (inputType === 'github') {
@@ -139,7 +140,7 @@ export const useRepoProcessor = () => {
                  }
                  
                  const metadata = extractFileMetadata(content, node.path);
-                 sourceFiles.push({ path: node.path, content, size: node.size || 0, metadata });
+                 sourceFiles.push({ path: node.path, content, size: node.size || 0, lines, metadata });
                  
                  if (fetchedCount % 5 === 0) setProgress(Math.round((fetchedCount / maxFetch) * 10));
              }
@@ -238,7 +239,7 @@ export const useRepoProcessor = () => {
           const technicalSummary = summarySplit[1] ? summarySplit[1].trim() : "No summary provided.";
 
           fileSummaries.push(`File: ${file.path}\nSummary: ${technicalSummary}\nDetected Metadata: ${JSON.stringify(file.metadata)}\n`);
-          const headerHTML = generateFileHeaderHTML(file.path, file.size);
+          const headerHTML = generateFileHeaderHTML(file.path, file.lines);
           parts.code += `<details>\n<summary>${headerHTML}</summary>\n\n${displayContent}\n\n</details>\n\n`;
 
           setGeneratedDoc(assembleDoc());
@@ -259,6 +260,8 @@ File Technical Summaries (Map-Reduce Output):
 ${fileSummaries.join('\n----------------\n')}
 `;
 
+      const strictModeSuffix = "\n\nCRITICAL INSTRUCTION: DO NOT generate a summary. DO NOT use Markdown headers. Output ONLY the code block starting with ```mermaid.";
+
       // Phase 4+: Higher Level Docs
       if (docLevels.arch) {
         addLog('فاز ۴: تحلیل معماری کلان...', 'info');
@@ -273,7 +276,7 @@ ${fileSummaries.join('\n----------------\n')}
         const dbFiles = sourceFiles.filter(f => f.metadata.isDbSchema || f.path.includes('entity') || f.path.includes('model') || f.path.includes('schema'));
         let erdContext = dbFiles.length > 0 ? dbFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n') 
           : `No explicit schema files found. Infer schema from these summaries:\n${fileSummaries.filter(s => s.toLowerCase().includes('database') || s.toLowerCase().includes('model')).join('\n')}`;
-        parts.erd = extractMermaidCode(await generateCompletion(config, erdContext, PROMPT_LEVEL_7_ERD));
+        parts.erd = extractMermaidCode(await generateCompletion(config, erdContext + strictModeSuffix, PROMPT_LEVEL_7_ERD));
         setGeneratedDoc(assembleDoc());
         completedSteps++;
         updateProgress(20);
@@ -282,7 +285,7 @@ ${fileSummaries.join('\n----------------\n')}
       if (docLevels.classDiagram) {
         addLog('فاز ۶: ترسیم نمودار کلاس...', 'info');
         const classContext = `List of detected classes and structure:\n${fileSummaries.filter(s => s.includes('"classes":[')).join('\n')}`;
-        parts.class = extractMermaidCode(await generateCompletion(config, classContext, PROMPT_LEVEL_8_CLASS));
+        parts.class = extractMermaidCode(await generateCompletion(config, classContext + strictModeSuffix, PROMPT_LEVEL_8_CLASS));
         setGeneratedDoc(assembleDoc());
         completedSteps++;
         updateProgress(20);
@@ -292,7 +295,7 @@ ${fileSummaries.join('\n----------------\n')}
         addLog('فاز ۷: ترسیم نمودار زیرساخت (Docker/Cloud)...', 'info');
         const infraFiles = sourceFiles.filter(f => f.metadata.isInfra || CONFIG_FILES.has(f.path.split('/').pop() || ''));
         let infraContext = infraFiles.length > 0 ? infraFiles.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n\n') : reducedContext;
-        parts.infra = extractMermaidCode(await generateCompletion(config, infraContext, PROMPT_LEVEL_9_INFRA));
+        parts.infra = extractMermaidCode(await generateCompletion(config, infraContext + strictModeSuffix, PROMPT_LEVEL_9_INFRA));
         setGeneratedDoc(assembleDoc());
         completedSteps++;
         updateProgress(20);
@@ -300,7 +303,7 @@ ${fileSummaries.join('\n----------------\n')}
 
       if (docLevels.sequence) {
         addLog('فاز ۸: ترسیم نمودار توالی...', 'info');
-        parts.seq = extractMermaidCode(await generateCompletion(config, reducedContext, PROMPT_LEVEL_5_SEQUENCE));
+        parts.seq = extractMermaidCode(await generateCompletion(config, reducedContext + strictModeSuffix, PROMPT_LEVEL_5_SEQUENCE));
         setGeneratedDoc(assembleDoc());
         completedSteps++;
         updateProgress(20);
