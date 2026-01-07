@@ -1,10 +1,9 @@
 
-
 import { useState, useEffect } from 'react';
 import { OllamaConfig, ProcessingLog, ProcessedFile, CodeSymbol } from '../types';
-import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_4_OPS, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_6_API, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA } from '../utils/constants';
+import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA } from '../utils/constants';
 import { checkOllamaConnection, generateCompletion } from '../services/ollamaService';
-import { extractFileMetadata } from '../services/codeParser';
+import { extractFileMetadata, resolveReferences } from '../services/codeParser';
 import { LocalVectorStore } from '../services/vectorStore';
 import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent } from '../services/githubService';
 import { generateFileHeaderHTML, extractMermaidCode } from '../utils/markdownHelpers';
@@ -46,7 +45,7 @@ export const useRepoProcessor = () => {
     } catch (e) { return []; }
   });
   
-  // NEW: Knowledge Graph State
+  // Updated: Store Full Symbol Table
   const [knowledgeGraph, setKnowledgeGraph] = useState<Record<string, CodeSymbol>>(() => {
      if (typeof window === 'undefined') return {};
      try {
@@ -72,7 +71,7 @@ export const useRepoProcessor = () => {
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
     } catch (e) {
-      console.warn('Failed to save session to localStorage (Quota might be exceeded):', e);
+      console.warn('Failed to save session to localStorage:', e);
     }
   }, [logs, generatedDoc, stats, knowledgeGraph, isProcessing]);
 
@@ -91,47 +90,35 @@ export const useRepoProcessor = () => {
     setHasContext(false);
     
     localStorage.removeItem(STORAGE_KEY);
-    
     vectorStoreRef.current = new LocalVectorStore(config);
 
     try {
       addLog('در حال بررسی اتصال به Ollama...', 'info');
       const isConnected = await checkOllamaConnection(config);
-      if (!isConnected) {
-        throw new Error(`اتصال به Ollama در آدرس ${config.baseUrl} برقرار نشد.`);
-      }
+      if (!isConnected) throw new Error(`اتصال به Ollama در آدرس ${config.baseUrl} برقرار نشد.`);
       addLog('اتصال به Ollama برقرار شد.', 'success');
 
       let fileTree = '';
       const configContents: string[] = [];
       const sourceFiles: ProcessedFile[] = [];
       const languageStats: Record<string, number> = {};
-      const tempSymbolTable: Record<string, CodeSymbol> = {};
 
-      addLog('فاز ۱: اسکن فایل‌ها و ساخت گراف دانش (CodeWiki Analysis)...', 'info');
+      addLog('فاز ۱: اسکن لغوی و توکن‌بندی فایل‌ها (Lexical Analysis)...', 'info');
 
-      // --- File Fetching & Graph Building ---
-      const handleFileContent = (path: string, content: string, size: number) => {
-           // Calculate LOC
+      // Helper to process a single file content
+      const ingestFile = (path: string, content: string, size: number) => {
            const lines = content.split(/\r\n|\r|\n/).length;
            const extension = '.' + path.split('.').pop()?.toLowerCase();
-           
            const langName = LANGUAGE_MAP[extension || ''] || 'Other';
-           if (langName !== 'Other') {
-               languageStats[langName] = (languageStats[langName] || 0) + lines;
-           }
            
-           // Deep Parse & Build Symbol Table
+           if (langName !== 'Other') languageStats[langName] = (languageStats[langName] || 0) + lines;
+           
+           // Pass 1: Parse Definitions (Local)
            const metadata = extractFileMetadata(content, path);
-           
-           // Add symbols to global table
-           metadata.symbols.forEach(sym => {
-              tempSymbolTable[sym.name] = sym; // Simple map by name (naive)
-           });
-
            return { path, content, size, lines, metadata };
       };
 
+      // --- File Loading Logic ---
       if (inputType === 'local' && files) {
           const fileList: File[] = Array.from(files);
           const readFileContent = (file: File): Promise<string> => {
@@ -155,36 +142,41 @@ export const useRepoProcessor = () => {
             if (CONFIG_FILES.has(file.name) || file.size < 100000) {
                const content = await readFileContent(file);
                if (CONFIG_FILES.has(file.name)) configContents.push(`\n--- ${file.name} ---\n${content}\n`);
-               
-               sourceFiles.push(handleFileContent(filePath, content, file.size));
+               sourceFiles.push(ingestFile(filePath, content, file.size));
             }
           }
       } else if (inputType === 'github') {
-          // Github logic (omitted for brevity, assume similar structure calling handleFileContent)
-          // ... (Reuse logic from previous implementation but use handleFileContent)
+          // Github logic omitted for brevity (same structure as original, calling ingestFile)
           const repoInfo = parseGithubUrl(githubUrl);
           if (!repoInfo) throw new Error("Invalid GitHub URL");
-           const { tree, branch } = await fetchGithubRepoTree(repoInfo.owner, repoInfo.repo);
-           const relevantNodes = tree.filter(node => {
+          const { tree, branch } = await fetchGithubRepoTree(repoInfo.owner, repoInfo.repo);
+          const relevantNodes = tree.filter(node => {
               const hasIgnoredDir = node.path.split('/').some(part => IGNORED_DIRS.has(part));
               const extension = '.' + node.path.split('.').pop()?.toLowerCase();
               return node.type === 'blob' && !hasIgnoredDir && ALLOWED_EXTENSIONS.has(extension);
           });
           let fetchedCount = 0;
           for (const node of relevantNodes) {
-             if (fetchedCount > 30) break; // Limit for demo
+             if (fetchedCount > 30) break;
              const content = await fetchGithubFileContent(repoInfo.owner, repoInfo.repo, branch, node.path);
              fileTree += `- ${node.path}\n`;
              if (CONFIG_FILES.has(node.path.split('/').pop()||'')) configContents.push(`\n--- ${node.path} ---\n${content}\n`);
-             sourceFiles.push(handleFileContent(node.path, content, node.size || 0));
+             sourceFiles.push(ingestFile(node.path, content, node.size || 0));
              fetchedCount++;
              setProgress(Math.round((fetchedCount / 30) * 10));
           }
       }
 
-      setKnowledgeGraph(tempSymbolTable);
+      // --- Pass 2: Cross-Reference Linking ---
+      addLog(`فاز ۱.۵: تحلیل وابستگی‌ها و لینک‌دهی مراجع (${sourceFiles.length} فایل)...`, 'info');
+      
+      const { symbolTable, nameIndex } = resolveReferences(sourceFiles);
+      setKnowledgeGraph(symbolTable); // This is the "CodeWiki" brain
+      
+      // Update metadata in sourceFiles with resolved references for context
+      // (Optional optimization: write back to sourceFiles if needed for RAG)
 
-      // Stats Generation (Same as before)
+      // --- Stats Generation ---
       const totalLines = Object.values(languageStats).reduce((a, b) => a + b, 0);
       let statsMarkdown = '';
       const processedStats: { lang: string; lines: number; percent: number; color: string }[] = [];
@@ -199,7 +191,7 @@ export const useRepoProcessor = () => {
         statsMarkdown = `\n| زبان / تکنولوژی | تعداد خط کد (LOC) | درصد پروژه |\n| :--- | :--- | :--- |\n${processedStats.map(s => `| **${s.lang}** | ${s.lines.toLocaleString()} خط | ${s.percent}% |`).join('\n')}\n`;
       }
 
-      // Steps handling
+      // --- Documentation Generation Pipeline ---
       let parts: any = { root: '', arch: '', ops: '', seq: '', api: '', erd: '', class: '', infra: '', code: '' };
       const assembleDoc = () => {
           let doc = `# مستندات جامع پروژه (CodeWiki)\n\nتولید شده توسط دستیار هوشمند رایان هم‌افزا\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
@@ -210,83 +202,76 @@ export const useRepoProcessor = () => {
           if (parts.class) doc += `## 🧩 نمودار کلاس (Class Diagram)\n\n${parts.class}\n\n---\n\n`;
           if (parts.infra) doc += `## ☁️ زیرساخت و معماری کلان (Infrastructure Diagram)\n\n${parts.infra}\n\n---\n\n`;
           if (parts.seq) doc += `## 🔄 نمودار توالی سناریوی اصلی (Sequence Diagram)\n\n${parts.seq}\n\n---\n\n`;
-          if (parts.api) doc += `## 🔌 مستندات API (OpenAPI)\n\n${parts.api}\n\n---\n\n`;
           if (parts.code) doc += `## 💻 مستندات کدها\n\n${parts.code}`;
           return doc;
       };
 
-      // Phase 2: Hybrid Indexing
-      addLog(`فاز ۲: ایندکس کردن ترکیبی (Hybrid Search Indexing) با مدل ${config.embeddingModel}...`, 'info');
+      addLog(`فاز ۲: ایندکس کردن ترکیبی (Hybrid Search Indexing)...`, 'info');
       await vectorStoreRef.current?.addDocuments(sourceFiles, (current, total) => {
-          const percentage = Math.round((current / total) * 20); 
+          const percentage = Math.round((current / total) * 20) + 10; 
           setProgress(percentage);
       });
-      addLog('پایگاه دانش CodeWiki آماده شد.', 'success');
       setHasContext(true);
 
       const fileSummaries: string[] = [];
 
-      // Phase 3: Code Analysis
+      // Phase 3: Code Analysis with Deep Context
       if (docLevels.code) {
-        addLog(`فاز ۳: تحلیل هوشمند کدها (${sourceFiles.length} فایل)...`, 'info');
+        addLog(`فاز ۳: تولید مستندات هوشمند...`, 'info');
         for (const file of sourceFiles) {
-          // Use our new Symbol Table logic for better prompts
-          const symbols = file.metadata.symbols.map(s => `- ${s.kind}: ${s.name} (Line ${s.line})`).join('\n');
+          // Provide Symbol Context to LLM
+          const localSymbols = file.metadata.symbols.map(s => {
+             const refs = symbolTable[s.id]?.references?.length || 0;
+             return `- ${s.kind} ${s.name} (Line ${s.line}, Used ${refs} times)`;
+          }).join('\n');
           
-          const filePrompt = `File Path: ${file.path}\n\nSYMBOLS DETECTED:\n${symbols}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
+          const filePrompt = `File Path: ${file.path}\n\nSTRUCTURE & SYMBOLS:\n${localSymbols}\n\nCode Content:\n\`\`\`\n${file.content}\n\`\`\``;
           const rawResponse = await generateCompletion(config, filePrompt, PROMPT_LEVEL_2_CODE);
           
           const summarySplit = rawResponse.split(/\*\*SUMMARY_FOR_CONTEXT\*\*|---SUMMARY---/i);
           const displayContent = summarySplit[0].trim();
-          const technicalSummary = summarySplit[1] ? summarySplit[1].trim() : "Summary available in code view.";
+          const technicalSummary = summarySplit[1] ? summarySplit[1].trim() : "Available in code view.";
 
           fileSummaries.push(`File: ${file.path}\nSummary: ${technicalSummary}\n`);
+          
+          // Generate ID for scrolling
+          const safeId = file.path.replace(/[^a-zA-Z0-9]/g, '_');
           const headerHTML = generateFileHeaderHTML(file.path, file.lines);
-          parts.code += `<details>\n<summary>${headerHTML}</summary>\n\n${displayContent}\n\n</details>\n\n`;
+          
+          // Wrap in a div with ID for navigation
+          parts.code += `<div id="file-${safeId}">\n<details>\n<summary>${headerHTML}</summary>\n\n${displayContent}\n\n</details>\n</div>\n\n`;
 
           setGeneratedDoc(assembleDoc());
           setProgress(prev => Math.min(prev + 5, 80));
         }
       }
 
-      // ... (Rest of phases arch, erd, etc. remain the same as previous implementation)
+      // Generation of Diagram Phases (Arch, ERD, Sequence, Infra)
       const reducedContext = `Files:\n${fileTree}\nSummaries:\n${fileSummaries.join('\n')}`;
+      const strictModeSuffix = "\n\nCRITICAL INSTRUCTION: DO NOT generate a summary. Output ONLY the code block starting with ```mermaid.";
 
       if (docLevels.root) {
           parts.root = await generateCompletion(config, reducedContext, PROMPT_LEVEL_1_ROOT);
           setGeneratedDoc(assembleDoc());
       }
-      
-      // Strict mode suffix reused
-      const strictModeSuffix = "\n\nCRITICAL INSTRUCTION: DO NOT generate a summary. DO NOT use Markdown headers. Output ONLY the code block starting with ```mermaid.";
-
       if (docLevels.erd) {
-        addLog('در حال ترسیم نمودار ERD...', 'info');
         const dbFiles = sourceFiles.filter(f => f.metadata.isDbSchema);
         let erdContext = dbFiles.length > 0 ? dbFiles.map(f => f.content).join('\n') : reducedContext;
         parts.erd = extractMermaidCode(await generateCompletion(config, erdContext + strictModeSuffix, PROMPT_LEVEL_7_ERD));
         setGeneratedDoc(assembleDoc());
       }
-      
-       if (docLevels.classDiagram) {
-        addLog('در حال ترسیم نمودار کلاس...', 'info');
-        const classContext = `Classes:\n${Object.keys(tempSymbolTable).filter(k => tempSymbolTable[k].kind === 'class').join('\n')}`;
+      if (docLevels.classDiagram) {
+        // Use high-level class definitions for better diagram
+        const classNames = Object.values(symbolTable).filter(s => s.kind === 'class').map(s => s.name).join(', ');
+        const classContext = `Detected Classes: ${classNames}\n\n${reducedContext}`;
         parts.class = extractMermaidCode(await generateCompletion(config, classContext + strictModeSuffix, PROMPT_LEVEL_8_CLASS));
         setGeneratedDoc(assembleDoc());
       }
-
-      // --- ADDED: Sequence Diagram Generation ---
       if (docLevels.sequence) {
-         addLog('در حال ترسیم نمودار توالی (Sequence)...', 'info');
-         // We feed it the summaries + file tree to deduce the main logic flow
          parts.seq = extractMermaidCode(await generateCompletion(config, reducedContext + strictModeSuffix, PROMPT_LEVEL_5_SEQUENCE));
          setGeneratedDoc(assembleDoc());
       }
-
-      // --- ADDED: Infrastructure Diagram Generation ---
       if (docLevels.infra) {
-         addLog('در حال ترسیم نقشه زیرساخت (Infrastructure)...', 'info');
-         // Infra needs awareness of config files like docker/k8s/terraform
          const infraContext = `Config Files Content:\n${configContents.join('\n')}\n\nProject Structure:\n${fileTree}`;
          parts.infra = extractMermaidCode(await generateCompletion(config, infraContext + strictModeSuffix, PROMPT_LEVEL_9_INFRA));
          setGeneratedDoc(assembleDoc());

@@ -1,5 +1,4 @@
 
-
 export interface FileNode {
   path: string;
   name: string;
@@ -30,26 +29,34 @@ export enum AppMode {
   SETTINGS = 'SETTINGS'
 }
 
-// --- CODEWIKI INTELLIGENCE TYPES ---
+// --- CODEWIKI INTELLIGENCE TYPES (UPDATED) ---
 
-export type SymbolKind = 'class' | 'function' | 'variable' | 'interface' | 'endpoint' | 'database_table';
+export type SymbolKind = 'class' | 'function' | 'variable' | 'interface' | 'endpoint' | 'database_table' | 'import';
 
 export interface CodeSymbol {
-  id: string;          // Unique ID (e.g., "UserService:login")
-  name: string;        // Display Name (e.g., "login")
+  id: string;          // Unique Global ID (e.g., "src/services/auth.ts:loginUser")
+  name: string;        // Display Name (e.g., "loginUser")
   kind: SymbolKind;
   filePath: string;
   line: number;
-  codeSnippet: string; // For Hover Preview
-  docString?: string;  // JSDoc / DocString
-  references: string[]; // List of file paths using this symbol
+  scope: string;       // 'global', 'class:UserService', 'function:init'
+  codeSnippet: string; 
+  docString?: string;  
+  references: ReferenceLocation[]; // Where is this symbol used?
+  imports?: string[]; // If it's a file/module, what does it import?
+}
+
+export interface ReferenceLocation {
+  filePath: string;
+  line: number;
+  snippet: string;
 }
 
 export interface FileMetadata {
   path: string;
   language: string;
-  symbols: CodeSymbol[]; // Rich AST-like symbols
-  dependencies: string[]; // Imported files
+  symbols: CodeSymbol[]; 
+  dependencies: string[]; // List of imported file paths
   isDbSchema: boolean;
   isInfra: boolean;
   apiEndpoints: string[];
@@ -57,7 +64,8 @@ export interface FileMetadata {
 
 export interface KnowledgeGraph {
   nodes: Record<string, FileMetadata>; // Map filePath -> Metadata
-  symbolTable: Record<string, CodeSymbol>; // Map symbolName -> Symbol
+  symbolTable: Record<string, CodeSymbol>; // Map symbolId -> Symbol Data
+  nameIndex: Record<string, string[]>; // Map simpleName ("User") -> [IDs...] (handle collisions)
 }
 
 // --- RAG & SEARCH TYPES ---
@@ -69,10 +77,10 @@ export interface VectorDocument {
     filePath: string;
     startLine?: number;
     endLine?: number;
-    symbolRef?: string; // Link to specific symbol
+    symbolRef?: string; 
   };
   embedding?: number[];
-  tokens?: Set<string>; // For Hybrid Search (Keyword Matching)
+  tokens?: Set<string>; 
 }
 
 export interface SearchResult {

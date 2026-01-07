@@ -7,21 +7,45 @@ import remarkGfm from 'https://esm.sh/remark-gfm@4.0.0';
 // @ts-ignore
 import rehypeRaw from 'https://esm.sh/rehype-raw@7.0.0?bundle';
 import MermaidRenderer from './MermaidRenderer';
-import { useRepoProcessor } from '../hooks/useRepoProcessor'; // Access Knowledge Graph
+import { useRepoProcessor } from '../hooks/useRepoProcessor'; 
 import { CodeSymbol } from '../types';
+import { ArrowRight, Code, MapPin } from 'lucide-react';
 
 interface WikiLinkProps {
   symbolName: string;
   children: React.ReactNode;
   knowledgeGraph: Record<string, CodeSymbol>;
+  nameIndex?: Record<string, string[]>;
 }
 
-// Interactive WikiLink Component
+// Interactive WikiLink Component with "Go to Definition"
 const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGraph }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const symbol = knowledgeGraph[symbolName];
+  
+  // Find symbol in graph. Since we pass the NAME, we need to find the ID.
+  // In a perfect world we pass the ID, but Markdown text is just text.
+  // We search for a symbol that matches this name.
+  const symbolEntry = Object.values(knowledgeGraph).find(s => s.name === symbolName);
 
-  if (!symbol) return <span className="text-slate-700 font-medium">{children}</span>;
+  if (!symbolEntry) return <span className="text-slate-700 font-medium">{children}</span>;
+
+  const handleJump = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const safeId = `file-${symbolEntry.filePath.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const element = document.getElementById(safeId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Try to open the details element if it's closed
+      const details = element.querySelector('details');
+      if (details) details.open = true;
+      
+      // Highlight effect
+      element.classList.add('ring-2', 'ring-brand-500', 'ring-offset-2');
+      setTimeout(() => element.classList.remove('ring-2', 'ring-brand-500', 'ring-offset-2'), 2000);
+    } else {
+      console.warn('Target element not found:', safeId);
+    }
+  };
 
   return (
     <span 
@@ -29,22 +53,32 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <span className="text-brand-600 font-bold cursor-pointer border-b border-dashed border-brand-300 hover:bg-brand-50 transition-colors">
+      <button 
+        onClick={handleJump}
+        className="text-brand-600 font-bold cursor-pointer border-b border-dashed border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors inline-flex items-center gap-0.5"
+      >
         {children}
-      </span>
+      </button>
 
       {/* Code Preview Hover Card */}
       {isHovered && (
         <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-96 bg-[#1E293B] rounded-xl shadow-2xl border border-slate-700 text-left dir-ltr p-4 animate-in zoom-in-95 duration-200">
            <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-2">
-              <span className="text-xs font-mono text-emerald-400 font-bold">{symbol.kind} {symbol.name}</span>
-              <span className="text-[10px] text-slate-400">{symbol.filePath}:{symbol.line}</span>
+              <span className="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1">
+                <Code className="w-3 h-3" />
+                {symbolEntry.kind} {symbolEntry.name}
+              </span>
+              <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {symbolEntry.filePath}:{symbolEntry.line}
+              </span>
            </div>
-           <pre className="text-xs font-mono text-slate-300 overflow-x-auto custom-scrollbar max-h-48">
-             {symbol.codeSnippet}
+           <pre className="text-xs font-mono text-slate-300 overflow-x-auto custom-scrollbar max-h-48 p-2 bg-slate-900 rounded-lg">
+             {symbolEntry.codeSnippet || 'Loading snippet...'}
            </pre>
-           <div className="mt-2 text-[10px] text-slate-500 flex gap-2">
-              <span>References: {symbol.references.length}</span>
+           <div className="mt-2 text-[10px] text-slate-500 flex justify-between items-center">
+              <span>Refs: {symbolEntry.references?.length || 0}</span>
+              <span className="text-brand-400 flex items-center gap-1">Click to navigate <ArrowRight className="w-3 h-3" /></span>
            </div>
            {/* Arrow */}
            <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1E293B] rotate-45 border-r border-b border-slate-700 -mt-1.5"></div>
@@ -57,51 +91,32 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
 const MarkdownRenderer = ({ content }: { content: string }) => {
   const { knowledgeGraph } = useRepoProcessor();
 
-  // Pre-process text to auto-link known symbols (Simple regex approach for performance)
-  // In a full implementation, we would use a rehype plugin.
-  const processedContent = React.useMemo(() => {
-    if (!knowledgeGraph || Object.keys(knowledgeGraph).length === 0) return content;
-    
-    // Naive replacement for demo purposes. Real parser would be safer.
-    // We only replace exact words that match a symbol name and are capitalized (usually classes)
-    let newContent = content;
-    Object.keys(knowledgeGraph).forEach(key => {
-        if (key.length > 3) { // Avoid linking short words
-           const regex = new RegExp(`\\b(${key})\\b`, 'g');
-           // We use a special marker that we can pick up in the custom component renderer
-           // However, since we can't easily inject custom components into raw string for ReactMarkdown without plugins,
-           // We will rely on ReactMarkdown's 'code' block detection or specific text handling.
-           
-           // Better strategy for this constraint: 
-           // We will pass the knowledgeGraph to a custom text renderer if possible, 
-           // OR we accept that only explicit links work in this version.
-        }
-    });
-    return content;
-  }, [content, knowledgeGraph]);
-
-  // Helper to detect if a text node matches a symbol
+  // Custom Text Renderer to detect symbols and auto-link them
   const TextRenderer = ({ children }: any) => {
     const text = String(children);
-    // If text is exactly a known symbol
-    if (knowledgeGraph && knowledgeGraph[text]) {
-      return <WikiLink symbolName={text} knowledgeGraph={knowledgeGraph}>{text}</WikiLink>;
-    }
-    // If text contains a symbol (simple split)
-    if (knowledgeGraph) {
-       const parts = text.split(/(\s+)/);
-       return (
-         <>
-           {parts.map((part, i) => {
-             if (knowledgeGraph[part]) {
-                return <WikiLink key={i} symbolName={part} knowledgeGraph={knowledgeGraph}>{part}</WikiLink>;
-             }
-             return part;
-           })}
-         </>
-       );
-    }
-    return <>{children}</>;
+    if (!knowledgeGraph || Object.keys(knowledgeGraph).length === 0) return <>{children}</>;
+
+    // Split text by whitespace to check words
+    // NOTE: This is naive. Ideally, we would use a proper tokenizer or findAll.
+    // For React simplicity, we split by space and check exact matches.
+    const parts = text.split(/(\s+|[,.;()])/); 
+    
+    return (
+      <>
+        {parts.map((part, i) => {
+           // Clean the part (remove punctuation if attached, though split helps)
+           const cleanPart = part.trim();
+           // Find if this word corresponds to a known Class/Function definition
+           // We filter out common words to avoid noise
+           const isSymbol = Object.values(knowledgeGraph).some(s => s.name === cleanPart && (s.kind === 'class' || s.kind === 'function' || s.kind === 'interface'));
+           
+           if (isSymbol && cleanPart.length > 2) { // length check to avoid single var names like 'i'
+              return <WikiLink key={i} symbolName={cleanPart} knowledgeGraph={knowledgeGraph}>{part}</WikiLink>;
+           }
+           return part;
+        })}
+      </>
+    );
   };
 
   return (
@@ -112,7 +127,6 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
         h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-slate-900 my-6 border-b-2 border-slate-100 pb-3" {...props} />,
         h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-slate-800 mt-8 mb-4 flex items-center gap-2" {...props} />,
         h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold text-slate-700 mt-6 mb-2" {...props} />,
-        // Use custom text renderer for auto-linking
         p: ({node, children, ...props}: any) => (
            <p className="text-slate-600 leading-8 mb-4 text-justify" {...props}>
              {React.Children.map(children, child => {
