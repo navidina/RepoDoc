@@ -1,9 +1,7 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, Loader2, ZoomIn, ZoomOut, RefreshCcw, Download } from 'lucide-react';
-// @ts-ignore
-import mermaid from 'https://esm.sh/mermaid@10.9.0';
+import mermaid from 'mermaid';
 
 const MermaidRenderer = ({ code }: { code: string }) => {
   const [svg, setSvg] = useState('');

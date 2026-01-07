@@ -1,11 +1,8 @@
 
 import React, { useState } from 'react';
-// @ts-ignore
-import ReactMarkdown from 'https://esm.sh/react-markdown@9.0.1?deps=react@19.2.3';
-// @ts-ignore
-import remarkGfm from 'https://esm.sh/remark-gfm@4.0.0';
-// @ts-ignore
-import rehypeRaw from 'https://esm.sh/rehype-raw@7.0.0?bundle';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import MermaidRenderer from './MermaidRenderer';
 import { useRepoProcessor } from '../hooks/useRepoProcessor'; 
 import { CodeSymbol } from '../types';
