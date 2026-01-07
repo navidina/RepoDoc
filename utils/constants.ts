@@ -172,28 +172,39 @@ export const PROMPT_LEVEL_4_OPS = `شما مهندس DevOps هستید.
 2. **محتوا:** پیش‌نیازها، متغیرهای محیطی (ENV)، نحوه بیلد و دیپلوی.
 `;
 
-// --- Level 5: Sequence Diagram (Strict Mode) ---
-export const PROMPT_LEVEL_5_SEQUENCE = `STRICT MODE: ACTIVATED.
-ROLE: Text-to-MermaidJS Converter.
-INSTRUCTION: You are a machine that outputs ONLY code. You do NOT speak human language.
-
-TASK: Create a 'sequenceDiagram' based on the project overview.
+// --- Level 5: Sequence Diagram (Updated: Professional) ---
+export const PROMPT_LEVEL_5_SEQUENCE = `ROLE: Senior Software Architect.
+TASK: Create a DETAILED MermaidJS Sequence Diagram for the main logic flow.
 
 CRITICAL RULES:
-1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
-2. NO summaries. NO explanations. NO markdown headers.
-3. Syntax:
-   - Use "sequenceDiagram"
-   - Quote ALL labels: A->>B: "Message"
-   - Quote ALL participants: participant A as "Name"
+1. **OUTPUT ONLY CODE:** Start with \`\`\`mermaid.
+2. **Features:** Use \`autonumber\`, \`box\`, \`alt\`, \`opt\`.
+3. **Participants:** Define participants explicitly at the top with clear names.
+4. **Labels:** ALL messages MUST be in Persian (Farsi) and wrapped in double quotes: \`A->>B: "پیام فارسی"\`.
 
 Example Output:
 \`\`\`mermaid
 sequenceDiagram
-    participant U as "User"
-    participant S as "Server"
-    U->>S: "Login"
-    S-->>U: "Success"
+    autonumber
+    box "Client Side" #f9f9f9
+        participant U as "User"
+        participant C as "Client"
+    end
+    box "Server Side" #ececff
+        participant S as "Server"
+        participant D as "Database"
+    end
+    
+    U->>C: "Click Button"
+    activate C
+    C->>S: "API Request"
+    activate S
+    S->>D: "Query"
+    D-->>S: "Result"
+    S-->>C: "Response"
+    deactivate S
+    C-->>U: "Show Data"
+    deactivate C
 \`\`\`
 `;
 
@@ -252,22 +263,46 @@ classDiagram
 \`\`\`
 `;
 
-// --- Level 9: Infrastructure Diagram ---
-export const PROMPT_LEVEL_9_INFRA = `STRICT MODE: ACTIVATED.
-ROLE: Text-to-MermaidJS Converter.
-
-TASK: Create a 'flowchart TD'.
+// --- Level 9: Infrastructure Diagram (Updated: Professional) ---
+export const PROMPT_LEVEL_9_INFRA = `ROLE: Cloud Architect.
+TASK: Create a COMPREHENSIVE MermaidJS Architecture Diagram.
 
 CRITICAL RULES:
-1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
-2. NO summaries. NO explanations.
-3. Syntax:
-   - Use "flowchart TD"
-   - Quote labels: A["My Label"]
+1. **OUTPUT ONLY CODE:** Start with \`\`\`mermaid.
+2. **Grouping:** Use \`subgraph "Name"\` ... \`end\` (Ensure \`end\` is on a new line).
+3. **Styling:** Use \`classDef\` to color-code.
+4. **Shapes:**
+   - Use \`[("Label")]\` for Databases/Storage.
+   - Use \`["Label"]\` for standard components.
+   - Use \`(("Label"))\` for Start/End points or small markers.
+5. **Syntax:**
+   - Avoid special characters in Node IDs (use \`Node1\`, \`DB_Main\`).
+   - Quote ALL labels explicitly: \`id["Label Text"]\`.
 
 Example Output:
 \`\`\`mermaid
-flowchart TD
-    A["Client"] --> B["Server"]
+flowchart TB
+    classDef client fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef service fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef db fill:#fff3e0,stroke:#ef6c00,stroke-width:2px;
+
+    subgraph "Client Layer"
+        Browser["React App"]:::client
+        Mobile["Mobile App"]:::client
+    end
+
+    subgraph "Backend Cluster"
+        API["API Gateway"]:::service
+        Auth["Auth Service"]:::service
+    end
+
+    subgraph "Data Persistence"
+        Redis[("Redis Cache")]:::db
+        PG[("PostgreSQL")]:::db
+    end
+
+    Browser --> API
+    API --> Auth
+    Auth --> PG
 \`\`\`
 `;

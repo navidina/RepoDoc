@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle, Loader2, ZoomIn, ZoomOut, RefreshCcw, Maximize } from 'lucide-react';
+import { AlertCircle, Loader2, ZoomIn, ZoomOut, RefreshCcw, Download } from 'lucide-react';
 // @ts-ignore
 import mermaid from 'https://esm.sh/mermaid@10.9.0';
 
@@ -18,9 +19,22 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Handlers
-  const handleZoomIn = () => setScale(s => Math.min(s + 0.2, 5));
-  const handleZoomOut = () => setScale(s => Math.max(s - 0.2, 0.4));
+  const handleZoomIn = () => setScale(s => Math.min(s + 0.5, 10)); // Increased max zoom to 10x
+  const handleZoomOut = () => setScale(s => Math.max(s - 0.5, 0.1)); // Decreased min zoom
   const handleReset = () => { setScale(1); setPosition({ x: 0, y: 0 }); };
+
+  const handleDownload = () => {
+    if (!svg) return;
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `diagram-${Date.now()}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -44,7 +58,7 @@ const MermaidRenderer = ({ code }: { code: string }) => {
         e.preventDefault();
         e.stopPropagation();
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        setScale(s => Math.min(Math.max(s + delta, 0.4), 5));
+        setScale(s => Math.min(Math.max(s + delta, 0.1), 10));
       }
   };
 
@@ -58,8 +72,17 @@ const MermaidRenderer = ({ code }: { code: string }) => {
         fixed = fixed.substring(7).trim();
     }
     fixed = fixed.replace(/^#+.*$/gm, '');
-    fixed = fixed.replace(/\[(?![ "])(.*?\(.*?\).*?)(?<![" ])\]/g, '["$1"]');
-    fixed = fixed.replace(/\[(?![ "])(.*\s+.*)(?<![" ])\]/g, '["$1"]');
+    
+    // Fix: Unquoted labels, but PROTECT database shapes like [("Label")]
+    // We only quote if it contains parenthesis AND does NOT start with ("
+    fixed = fixed.replace(/\[(?![ "])(?!\(")(.*?\(.*?\).*?)(?<![" ])\]/g, '["$1"]');
+    
+    // Fix: Generic unquoted labels with spaces, ignoring those starting with ("
+    fixed = fixed.replace(/\[(?![ "])(?!\(")(.*\s+.*)(?<![" ])\]/g, '["$1"]');
+    
+    // Fix: Ensure 'end' keyword is on its own line (common LLM issue)
+    fixed = fixed.replace(/(\S)\s+end\s*$/gm, '$1\nend');
+
     fixed = fixed.replace(/Style /g, 'style ');
     if (fixed.startsWith('graph ')) {
        fixed = fixed.replace('graph ', 'flowchart ');
@@ -163,6 +186,8 @@ const MermaidRenderer = ({ code }: { code: string }) => {
             <button onClick={handleZoomIn} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="بزرگنمایی"><ZoomIn className="w-4 h-4" /></button>
             <button onClick={handleZoomOut} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="کوچک‌نمایی"><ZoomOut className="w-4 h-4" /></button>
             <button onClick={handleReset} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="بازنشانی"><RefreshCcw className="w-4 h-4" /></button>
+            <div className="h-px bg-slate-200 my-0.5"></div>
+            <button onClick={handleDownload} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="دانلود دیاگرام (SVG)"><Download className="w-4 h-4" /></button>
          </div>
 
          {/* Canvas */}

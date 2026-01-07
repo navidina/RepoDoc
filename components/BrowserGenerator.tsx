@@ -1,9 +1,8 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart } from 'lucide-react';
-import { OllamaConfig } from '../types';
+import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart, CheckCircle2, FileText, Cpu, Search, PenTool, ArrowRight } from 'lucide-react';
+import { OllamaConfig, ProcessingLog } from '../types';
 import { LocalVectorStore } from '../services/vectorStore';
+import { IGNORED_DIRS, ALLOWED_EXTENSIONS } from '../utils/constants';
 
 // Custom Hooks
 import { useRepoProcessor } from '../hooks/useRepoProcessor';
@@ -20,6 +19,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   // --- Input State ---
   const [inputType, setInputType] = useState<'local' | 'github'>('local');
   const [files, setFiles] = useState<FileList | null>(null);
+  const [scanStats, setScanStats] = useState<{ total: number, valid: number } | null>(null);
   const [githubUrl, setGithubUrl] = useState('');
   
   const [docLevels, setDocLevels] = useState({
@@ -32,6 +32,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   const [activeTab, setActiveTab] = useState<'docs' | 'chat'>('docs');
   const importInputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
   const vectorStoreRef = useRef<LocalVectorStore | null>(null);
 
   // --- Hooks ---
@@ -44,6 +45,13 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     }
   }, [chatMessages, activeTab]);
 
+  // Auto-scroll logs
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [logs]);
+
   // --- Handlers ---
   const handleStartProcessing = () => {
     processRepository({ config, inputType, files, githubUrl, docLevels, vectorStoreRef });
@@ -52,7 +60,25 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   };
 
   const handleDirectorySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) setFiles(e.target.files);
+    if (e.target.files && e.target.files.length > 0) {
+       const fileList = e.target.files;
+       let validCount = 0;
+       
+       // Quick Scan using constants
+       Array.from(fileList).forEach(file => {
+           const filePath = file.webkitRelativePath || file.name;
+           const pathParts = filePath.split('/');
+           const hasIgnoredDir = pathParts.some(part => IGNORED_DIRS.has(part));
+           const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+           
+           if (!hasIgnoredDir && ALLOWED_EXTENSIONS.has(extension)) {
+               validCount++;
+           }
+       });
+
+       setFiles(fileList);
+       setScanStats({ total: fileList.length, valid: validCount });
+    }
   };
 
   const handleImportMarkdown = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,13 +193,134 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     );
   };
 
+  // --- Processing HUD (Creative Processing View) ---
+  const ProcessingHUD = () => {
+    // Determine current phase based on progress and logs
+    let currentPhaseIdx = 0;
+    const stages = [
+      { id: 1, label: 'اسکن فایل‌ها', icon: Search, threshold: 10 },
+      { id: 2, label: 'ایندکس RAG', icon: Database, threshold: 30 },
+      { id: 3, label: 'تحلیل هوشمند', icon: BrainCircuit, threshold: 70 },
+      { id: 4, label: 'تولید مستندات', icon: PenTool, threshold: 100 },
+    ];
+    
+    // Simple logic to highlight stages
+    if (progress > 10) currentPhaseIdx = 1;
+    if (progress > 30) currentPhaseIdx = 2;
+    if (progress > 80) currentPhaseIdx = 3;
+
+    return (
+      <div className="bg-[#0F172A] rounded-[2rem] p-6 shadow-2xl border border-slate-800 text-white relative overflow-hidden flex flex-col h-full animate-in fade-in zoom-in-95 duration-500">
+        {/* Background Grid & Effects */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:20px_20px] opacity-20"></div>
+        <div className="absolute -top-20 -left-20 w-40 h-40 bg-brand-500/20 rounded-full blur-[50px] animate-pulse"></div>
+        <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-accent-pink/20 rounded-full blur-[50px] animate-pulse delay-700"></div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6 relative z-10">
+          <div className="flex items-center gap-3">
+             <div className="relative">
+                <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping absolute top-0 right-0"></div>
+                <div className="w-3 h-3 bg-emerald-500 rounded-full relative"></div>
+             </div>
+             <div>
+                <h3 className="font-bold text-sm tracking-widest text-emerald-400">RAYAN ENGINE ONLINE</h3>
+                <p className="text-[10px] text-slate-400 font-mono">Process ID: #{Math.floor(Math.random() * 9999)}</p>
+             </div>
+          </div>
+          <div className="font-mono text-2xl font-bold text-brand-400 drop-shadow-glow">
+            {progress}%
+          </div>
+        </div>
+
+        {/* Pipeline Visualization */}
+        <div className="flex items-center justify-between mb-8 relative z-10 px-2">
+           {stages.map((stage, idx) => {
+             const isActive = idx === currentPhaseIdx;
+             const isCompleted = idx < currentPhaseIdx;
+             
+             return (
+               <div key={stage.id} className="flex flex-col items-center gap-2 relative group flex-1">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${
+                    isActive 
+                      ? 'bg-brand-600 text-white shadow-[0_0_20px_rgba(124,58,237,0.5)] scale-110 border border-brand-400' 
+                      : isCompleted 
+                        ? 'bg-slate-800 text-emerald-400 border border-emerald-900/50' 
+                        : 'bg-slate-900 text-slate-600 border border-slate-800'
+                  }`}>
+                     <stage.icon className={`w-5 h-5 ${isActive ? 'animate-pulse' : ''}`} />
+                  </div>
+                  <span className={`text-[10px] font-bold whitespace-nowrap transition-colors ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                    {stage.label}
+                  </span>
+                  
+                  {/* Connector Line */}
+                  {idx < stages.length - 1 && (
+                    <div className="absolute top-5 right-[60%] w-[calc(100%-20px)] h-0.5 bg-slate-800 -z-10 dir-rtl">
+                       <div 
+                         className="h-full bg-gradient-to-l from-brand-500 to-transparent transition-all duration-1000"
+                         style={{ width: isCompleted ? '100%' : isActive ? '50%' : '0%' }}
+                       ></div>
+                    </div>
+                  )}
+               </div>
+             );
+           })}
+        </div>
+
+        {/* Live Terminal Log */}
+        <div className="flex-1 bg-black/40 rounded-xl border border-slate-800/50 p-4 font-mono text-xs overflow-hidden flex flex-col relative group">
+           <div className="flex items-center gap-2 mb-2 border-b border-slate-800 pb-2">
+              <Terminal className="w-3 h-3 text-slate-500" />
+              <span className="text-slate-500">System Logs</span>
+           </div>
+           
+           <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar mask-gradient-b">
+              {logs.length === 0 && (
+                <div className="text-slate-600 italic">Waiting for process start...</div>
+              )}
+              {logs.map((log, i) => (
+                <div key={i} className={`flex gap-2 animate-in slide-in-from-right-2 duration-300 ${
+                  log.type === 'error' ? 'text-red-400' :
+                  log.type === 'success' ? 'text-emerald-400' :
+                  log.type === 'warning' ? 'text-yellow-400' : 'text-blue-300'
+                }`}>
+                   <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
+                   <span className="break-all font-medium">
+                     <span className="mr-2 opacity-50">{'>'}</span>
+                     {log.message}
+                   </span>
+                </div>
+              ))}
+              <div ref={logsEndRef} />
+           </div>
+
+           {/* Scanning Overlay Effect */}
+           <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-brand-500/5 to-transparent h-10 w-full animate-scan top-0"></div>
+        </div>
+
+        {/* Footer Activity */}
+        <div className="mt-4 flex items-center justify-between text-[10px] text-slate-500 font-mono relative z-10">
+           <div className="flex items-center gap-2">
+              <Activity className="w-3 h-3 animate-bounce" />
+              <span>GPU Utilization: {isProcessing ? Math.floor(Math.random() * 30 + 40) : 0}%</span>
+           </div>
+           <div className="flex items-center gap-2">
+              <Server className="w-3 h-3" />
+              <span>Local Server: Connected</span>
+           </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 h-full">
       {/* --- LEFT PANEL: Sidebar Controls --- */}
       <div className="xl:col-span-4 flex flex-col gap-8 h-full overflow-y-auto pr-1">
         
-        {/* Source Selection Widget */}
-        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white relative overflow-hidden">
+        {/* Source Selection Widget (Disable when processing) */}
+        <div className={`bg-white rounded-[2rem] p-6 shadow-soft border border-white relative overflow-hidden transition-all duration-500 ${isProcessing ? 'opacity-50 grayscale pointer-events-none scale-95' : 'opacity-100'}`}>
            {/* Decorative bg blob */}
            <div className="absolute -top-10 -right-10 w-32 h-32 bg-brand-100 rounded-full blur-3xl opacity-50"></div>
            
@@ -198,13 +345,33 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                 // @ts-ignore
                 webkitdirectory="" directory="" onChange={handleDirectorySelect} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" disabled={isProcessing} 
               />
-              <div className={`border-2 border-dashed rounded-3xl p-10 transition-all text-center group-hover:border-brand-300 group-hover:bg-brand-50/50 relative overflow-hidden ${files ? 'border-emerald-300 bg-emerald-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
+              <div className={`border-2 border-dashed rounded-3xl p-8 transition-all text-center group-hover:border-brand-300 group-hover:bg-brand-50/50 relative overflow-hidden flex flex-col items-center justify-center min-h-[240px] ${files ? 'border-emerald-300 bg-emerald-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
                  <div className="absolute inset-0 bg-grid-slate-200/20 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))]"></div>
-                <div className="bg-white p-4 rounded-2xl shadow-card w-16 h-16 mx-auto flex items-center justify-center mb-4 text-brand-500 group-hover:scale-110 transition-transform relative z-10">
-                    <Upload className="w-8 h-8" />
-                </div>
-                <p className="text-sm font-bold text-slate-700 mb-1 relative z-10">{files ? 'پوشه انتخاب شد' : 'انتخاب پوشه کد'}</p>
-                <p className="text-xs text-slate-400 relative z-10">کلیک کنید یا پوشه را اینجا رها کنید</p>
+                
+                {files && scanStats ? (
+                  <div className="relative z-10 animate-in zoom-in duration-300">
+                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                        <CheckCircle2 className="w-8 h-8" />
+                     </div>
+                     <h3 className="text-slate-800 font-bold text-lg mb-2">پوشه آماده پردازش است</h3>
+                     <div className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-emerald-100/50 shadow-sm inline-flex flex-col items-center gap-1 min-w-[180px]">
+                        <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                           <FileText className="w-4 h-4" />
+                           <span>{scanStats.valid} فایل کد شناسایی شد</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">از مجموع {scanStats.total} فایل</span>
+                     </div>
+                     <p className="text-xs text-slate-400 mt-4">برای تغییر پوشه کلیک کنید</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-white p-4 rounded-2xl shadow-card w-16 h-16 mx-auto flex items-center justify-center mb-4 text-brand-500 group-hover:scale-110 transition-transform relative z-10">
+                        <Upload className="w-8 h-8" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700 mb-1 relative z-10">انتخاب پوشه کد</p>
+                    <p className="text-xs text-slate-400 relative z-10">کلیک کنید یا پوشه را اینجا رها کنید</p>
+                  </>
+                )}
               </div>
             </div>
           ) : (
@@ -221,13 +388,13 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
           )}
         </div>
 
-        {/* Levels Widget */}
-        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
+        {/* Levels Widget (Disable when processing) */}
+        <div className={`bg-white rounded-[2rem] p-6 shadow-soft border border-white transition-all duration-500 ${isProcessing ? 'opacity-50 grayscale pointer-events-none scale-95' : 'opacity-100'}`}>
           <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-3">
              <div className="bg-accent-pink/10 text-accent-pink p-2.5 rounded-xl shadow-sm"><Layers className="w-5 h-5" /></div>
              سطوح تحلیل و دیاگرام
           </h2>
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
              {[
                { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + خلاصه', icon: Code },
                { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', icon: Layers },
@@ -281,28 +448,20 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
           </div>
         </div>
 
-        {/* Action Button & Progress */}
-        <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
-          <button onClick={handleStartProcessing} disabled={(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing} className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all text-lg relative overflow-hidden group ${(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-glow hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]'}`}>
-            {!(isProcessing) && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-2xl"></div>}
-            {isProcessing ? <Loader2 className="animate-spin" /> : <Sparkles className="fill-current" />} 
-            <span className="relative">{isProcessing ? 'در حال تحلیل هوشمند...' : 'شروع آنالیز'}</span>
-          </button>
-
-          {(isProcessing || progress > 0) && (
-            <div className="mt-6">
-              <div className="flex justify-between text-xs text-slate-500 mb-2 font-bold px-1">
-                  <span>وضعیت پردازش</span>
-                  <span className="text-brand-600">{progress}%</span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden shadow-inner">
-                  <div className="bg-gradient-to-r from-brand-400 to-accent-pink h-full rounded-full transition-all duration-500 ease-out relative" style={{ width: `${progress}%` }}>
-                      <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div>
-                  </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Action Button OR Creative HUD */}
+        {!isProcessing ? (
+          <div className="bg-white rounded-[2rem] p-6 shadow-soft border border-white">
+            <button onClick={handleStartProcessing} disabled={(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing} className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all text-lg relative overflow-hidden group ${(inputType === 'local' && !files) || (inputType === 'github' && !githubUrl) || isProcessing ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-glow hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]'}`}>
+              {!(isProcessing) && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-2xl"></div>}
+              {isProcessing ? <Loader2 className="animate-spin" /> : <Sparkles className="fill-current" />} 
+              <span className="relative">{isProcessing ? 'در حال تحلیل هوشمند...' : 'شروع آنالیز'}</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-[400px]">
+             <ProcessingHUD />
+          </div>
+        )}
 
       </div>
 

@@ -1,16 +1,41 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChatMessage, OllamaConfig } from '../types';
 import { LocalVectorStore } from '../services/vectorStore';
 import { sendChatRequest } from '../services/ollamaService';
 
+const CHAT_STORAGE_KEY = 'rayan_chat_history';
+const DEFAULT_SYSTEM_MSG: ChatMessage = { role: 'system', content: 'شما یک دستیار هوشمند برنامه‌نویسی هستید. پاسخ‌ها باید کوتاه، دقیق و حرفه‌ای باشند.' };
+
 export const useChat = (config: OllamaConfig, vectorStoreRef: React.MutableRefObject<LocalVectorStore | null>, hasContext: boolean) => {
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'system', content: 'شما یک دستیار هوشمند برنامه‌نویسی هستید. پاسخ‌ها باید کوتاه، دقیق و حرفه‌ای باشند.' }
-  ]);
+  // Initialize state from localStorage
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === 'undefined') return [DEFAULT_SYSTEM_MSG];
+    try {
+      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+           return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load chat history', e);
+    }
+    return [DEFAULT_SYSTEM_MSG];
+  });
+
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isRetrieving, setIsRetrieving] = useState(false);
+
+  // Persist chat history
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatMessages));
+    } catch (e) {
+      console.warn('Failed to save chat history', e);
+    }
+  }, [chatMessages]);
 
   const handleSendMessage = async () => {
     if (!chatInput.trim() || isChatLoading) return;

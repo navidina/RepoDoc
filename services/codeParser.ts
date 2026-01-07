@@ -1,159 +1,169 @@
 
-
-import { FileMetadata } from '../types';
+import { FileMetadata, CodeSymbol, SymbolKind } from '../types';
 
 /**
- * A lightweight heuristic parser to extract "facts" from code without full AST overhead.
- * This runs in the browser and helps ground the LLM with deterministic data.
- * 
- * Updated: Improved comment handling to reduce false positives from commented-out code.
- * Updated: Detection for Database Schemas and Infrastructure files.
+ * Advanced Code Parser for CodeWiki.
+ * Moves beyond simple Regex to a Lexical Analysis approach to build a Symbol Table.
  */
+
+// Helper to sanitize code for snippet extraction
+const extractSnippet = (lines: string[], startLine: number, limit: number = 10): string => {
+  return lines.slice(startLine, Math.min(startLine + limit, lines.length)).join('\n');
+};
+
+const cleanDocString = (lines: string[], index: number): string | undefined => {
+  if (index <= 0) return undefined;
+  let i = index - 1;
+  const docs = [];
+  while (i >= 0) {
+    const line = lines[i].trim();
+    if (line.startsWith('*/') || line.endsWith('*/')) { i--; continue; }
+    if (line.startsWith('*') || line.startsWith('//') || line.startsWith('#')) {
+      docs.unshift(line.replace(/^(\/\/|#|\*)\s?/, ''));
+      i--;
+    } else if (line.startsWith('/*')) {
+       i--; 
+       break; 
+    } else {
+      break;
+    }
+  }
+  return docs.length > 0 ? docs.join(' ') : undefined;
+};
+
 export const extractFileMetadata = (content: string, path: string): FileMetadata => {
   const extension = path.split('.').pop()?.toLowerCase() || '';
-  const filename = path.split('/').pop()?.toLowerCase() || '';
+  const lines = content.split('\n');
   
   const metadata: FileMetadata = {
     path,
     language: extension,
-    classes: [],
-    functions: [],
-    imports: [],
+    symbols: [],
+    dependencies: [],
     apiEndpoints: [],
-    hasApiPattern: false,
     isDbSchema: false,
     isInfra: false
   };
 
-  // Skip minified or massive files
-  if (content.length > 100000) return metadata;
+  if (content.length > 200000) return metadata; // Safety cap
 
-  // --- 1. File Type Detection based on Name/Extension (Fast check) ---
+  // --- High-Level Classification ---
+  if (['.sql', '.prisma'].includes(extension)) metadata.isDbSchema = true;
+  if (path.includes('docker') || path.endsWith('.tf')) metadata.isInfra = true;
+
+  // --- Lexical Analyzers per Language ---
   
-  // Database Detection
-  if (['.sql', '.prisma'].includes(extension)) {
-      metadata.isDbSchema = true;
-  }
-  
-  // Infra Detection
-  if (['dockerfile', 'docker-compose.yml', 'docker-compose.yaml', 'main.tf', 'variables.tf', 'outputs.tf'].includes(filename) || extension === '.tf') {
-      metadata.isInfra = true;
-  }
+  // 1. JavaScript / TypeScript Analyzer
+  if (['js', 'jsx', 'ts', 'tsx'].includes(extension)) {
+    const regexClass = /class\s+([A-Z][a-zA-Z0-9_]*)/g;
+    const regexFunc = /(?:function\s+([a-zA-Z0-9_]+)|const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>)/g;
+    const regexImport = /import\s+.*\s+from\s+['"]([^'"]+)['"]/g;
+    const regexApi = /\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/gi;
 
-  const lines = content.split('\n');
+    lines.forEach((line, idx) => {
+      // Classes
+      let match;
+      while ((match = regexClass.exec(line)) !== null) {
+        metadata.symbols.push({
+          id: `${match[1]}`,
+          name: match[1],
+          kind: 'class',
+          filePath: path,
+          line: idx + 1,
+          codeSnippet: extractSnippet(lines, idx),
+          docString: cleanDocString(lines, idx),
+          references: []
+        });
+      }
 
-  // Regex Patterns
-  const patterns = {
-    // JS/TS
-    jsClass: /class\s+([A-Z][a-zA-Z0-9_]*)/,
-    jsFunc: /(?:function\s+([a-zA-Z0-9_]+)|const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>)/,
-    jsImport: /import\s+.*\s+from\s+['"]([^'"]+)['"]/,
-    
-    // Python
-    pyClass: /class\s+([a-zA-Z0-9_]+)/,
-    pyFunc: /def\s+([a-zA-Z0-9_]+)/,
-    pyImport: /(?:from\s+([a-zA-Z0-9_.]+) |import\s+([a-zA-Z0-9_.]+))/,
-
-    // API Patterns
-    apiGet: /\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/, // app.get('/users')
-    apiDecorator: /@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\s*\(\s*['"]([^'"]+)['"]/, // Spring/NestJS
-    apiPyRoute: /@app\.route\s*\(\s*['"]([^'"]+)['"]/, // Flask
-
-    // DB Patterns (in code)
-    typeOrmEntity: /@Entity\(['"]?([a-zA-Z0-9_]+)['"]?\)/, // TypeORM
-    mongooseSchema: /new\s+Schema\(/, // Mongoose
-    sqlCreateTable: /CREATE\s+TABLE\s+([a-zA-Z0-9_]+)/i
-  };
-
-  const isJsTs = ['js', 'jsx', 'ts', 'tsx'].includes(extension);
-  const isPy = ['py'].includes(extension);
-
-  let inBlockComment = false;
-
-  for (const line of lines) {
-    let trimmed = line.trim();
-    if (!trimmed) continue;
-
-    // --- Comment Handling ---
-    if (isJsTs) {
-      if (inBlockComment) {
-        if (trimmed.includes('*/')) {
-          inBlockComment = false;
-          trimmed = trimmed.split('*/')[1].trim(); 
-        } else {
-          continue;
+      // Functions
+      while ((match = regexFunc.exec(line)) !== null) {
+        const name = match[1] || match[2];
+        if (name) {
+          metadata.symbols.push({
+            id: `${name}`,
+            name: name,
+            kind: 'function',
+            filePath: path,
+            line: idx + 1,
+            codeSnippet: extractSnippet(lines, idx),
+            docString: cleanDocString(lines, idx),
+            references: []
+          });
         }
       }
 
-      if (trimmed.startsWith('/*')) {
-        if (trimmed.includes('*/')) {
-           trimmed = trimmed.replace(/\/\*.*?\*\//g, '').trim();
-        } else {
-           inBlockComment = true;
-           continue;
-        }
+      // Imports (Dependencies)
+      while ((match = regexImport.exec(line)) !== null) {
+        metadata.dependencies.push(match[1]);
+      }
+
+      // APIs
+      while ((match = regexApi.exec(line)) !== null) {
+        const method = match[1].toUpperCase();
+        const route = match[2];
+        metadata.apiEndpoints.push(`${method} ${route}`);
+        metadata.symbols.push({
+           id: `${method}_${route}`,
+           name: `${method} ${route}`,
+           kind: 'endpoint',
+           filePath: path,
+           line: idx + 1,
+           codeSnippet: line.trim(),
+           references: []
+        });
+      }
+    });
+  }
+
+  // 2. Python Analyzer
+  else if (extension === 'py') {
+    const regexClass = /^class\s+([a-zA-Z0-9_]+)/;
+    const regexFunc = /^def\s+([a-zA-Z0-9_]+)/;
+    const regexImport = /^(?:from\s+([a-zA-Z0-9_.]+)|import\s+([a-zA-Z0-9_.]+))/;
+    const regexRoute = /@app\.route\s*\(\s*['"]([^'"]+)['"]/;
+
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      
+      const classMatch = line.match(regexClass);
+      if (classMatch) {
+        metadata.symbols.push({
+          id: classMatch[1],
+          name: classMatch[1],
+          kind: 'class',
+          filePath: path,
+          line: idx + 1,
+          codeSnippet: extractSnippet(lines, idx),
+          docString: cleanDocString(lines, idx),
+          references: []
+        });
+      }
+
+      const funcMatch = line.match(regexFunc);
+      if (funcMatch) {
+         metadata.symbols.push({
+          id: funcMatch[1],
+          name: funcMatch[1],
+          kind: 'function',
+          filePath: path,
+          line: idx + 1,
+          codeSnippet: extractSnippet(lines, idx),
+          docString: cleanDocString(lines, idx),
+          references: []
+        });
+      }
+
+      const importMatch = trimmed.match(regexImport);
+      if (importMatch) {
+        metadata.dependencies.push(importMatch[1] || importMatch[2]);
       }
       
-      const commentIdx = trimmed.indexOf('//');
-      if (commentIdx !== -1) {
-        trimmed = trimmed.substring(0, commentIdx).trim();
+      const routeMatch = trimmed.match(regexRoute);
+      if (routeMatch) {
+         metadata.apiEndpoints.push(`ENDPOINT ${routeMatch[1]}`);
       }
-    } else if (isPy || extension === '.tf' || extension === '.yml' || extension === '.yaml') {
-      const commentIdx = trimmed.indexOf('#');
-      if (commentIdx !== -1) {
-         trimmed = trimmed.substring(0, commentIdx).trim();
-      }
-    }
-
-    if (!trimmed) continue;
-
-    // --- Content-Based Parsing ---
-
-    if (metadata.isDbSchema === false) {
-       if (trimmed.match(patterns.typeOrmEntity) || trimmed.match(patterns.mongooseSchema) || trimmed.match(patterns.sqlCreateTable)) {
-           metadata.isDbSchema = true;
-       }
-    }
-
-    if (isJsTs) {
-      const classMatch = trimmed.match(patterns.jsClass);
-      if (classMatch) metadata.classes.push(classMatch[1]);
-
-      const funcMatch = trimmed.match(patterns.jsFunc);
-      if (funcMatch) metadata.functions.push(funcMatch[1] || funcMatch[2]);
-
-      const importMatch = trimmed.match(patterns.jsImport);
-      if (importMatch) metadata.imports.push(importMatch[1]);
-
-      const apiMatch = trimmed.match(patterns.apiGet);
-      if (apiMatch) {
-        metadata.apiEndpoints.push(`${apiMatch[1].toUpperCase()} ${apiMatch[2]}`);
-        metadata.hasApiPattern = true;
-      }
-      
-      const decoratorMatch = trimmed.match(patterns.apiDecorator);
-      if (decoratorMatch) {
-          const method = decoratorMatch[1].replace('Mapping', '').toUpperCase();
-          metadata.apiEndpoints.push(`${method} ${decoratorMatch[2]}`);
-          metadata.hasApiPattern = true;
-      }
-
-    } else if (isPy) {
-      const classMatch = trimmed.match(patterns.pyClass);
-      if (classMatch) metadata.classes.push(classMatch[1]);
-
-      const funcMatch = trimmed.match(patterns.pyFunc);
-      if (funcMatch) metadata.functions.push(funcMatch[1]);
-
-       const importMatch = trimmed.match(patterns.pyImport);
-       if (importMatch) metadata.imports.push(importMatch[1] || importMatch[2]);
-
-       const apiMatch = trimmed.match(patterns.apiPyRoute);
-       if (apiMatch) {
-         metadata.apiEndpoints.push(`ENDPOINT ${apiMatch[1]}`);
-         metadata.hasApiPattern = true;
-       }
-    }
+    });
   }
 
   return metadata;

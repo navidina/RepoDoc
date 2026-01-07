@@ -17,7 +17,7 @@ export interface ProcessingLog {
 export interface OllamaConfig {
   baseUrl: string;
   model: string;
-  embeddingModel: string; // New: Specific model for RAG embeddings
+  embeddingModel: string;
 }
 
 export interface ChatMessage {
@@ -30,20 +30,38 @@ export enum AppMode {
   SETTINGS = 'SETTINGS'
 }
 
-// New Interface for Static Analysis (Gap 2 Solution)
+// --- CODEWIKI INTELLIGENCE TYPES ---
+
+export type SymbolKind = 'class' | 'function' | 'variable' | 'interface' | 'endpoint' | 'database_table';
+
+export interface CodeSymbol {
+  id: string;          // Unique ID (e.g., "UserService:login")
+  name: string;        // Display Name (e.g., "login")
+  kind: SymbolKind;
+  filePath: string;
+  line: number;
+  codeSnippet: string; // For Hover Preview
+  docString?: string;  // JSDoc / DocString
+  references: string[]; // List of file paths using this symbol
+}
+
 export interface FileMetadata {
   path: string;
   language: string;
-  classes: string[];
-  functions: string[];
-  imports: string[];
-  apiEndpoints: string[]; // e.g., "GET /users"
-  hasApiPattern: boolean;
-  isDbSchema: boolean;    // New: Detected as SQL/Prisma/Entity
-  isInfra: boolean;       // New: Detected as Docker/Terraform/Config
+  symbols: CodeSymbol[]; // Rich AST-like symbols
+  dependencies: string[]; // Imported files
+  isDbSchema: boolean;
+  isInfra: boolean;
+  apiEndpoints: string[];
 }
 
-// --- RAG Types ---
+export interface KnowledgeGraph {
+  nodes: Record<string, FileMetadata>; // Map filePath -> Metadata
+  symbolTable: Record<string, CodeSymbol>; // Map symbolName -> Symbol
+}
+
+// --- RAG & SEARCH TYPES ---
+
 export interface VectorDocument {
   id: string;
   content: string;
@@ -51,11 +69,18 @@ export interface VectorDocument {
     filePath: string;
     startLine?: number;
     endLine?: number;
+    symbolRef?: string; // Link to specific symbol
   };
   embedding?: number[];
+  tokens?: Set<string>; // For Hybrid Search (Keyword Matching)
 }
 
-// --- GitHub Types ---
+export interface SearchResult {
+  doc: VectorDocument;
+  score: number;
+  matchType: 'vector' | 'keyword' | 'hybrid';
+}
+
 export interface ProcessedFile {
   path: string;
   content: string;
