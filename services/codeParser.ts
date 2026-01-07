@@ -91,11 +91,6 @@ class CodeParser {
     return `${this.filePath}:${this.scopeStack.join('.')}:${name}`;
   }
 
-  private extractSnippet(startLine: number): string {
-    // Simplified snippet extraction for demo - normally would slice tokens
-    return `Line ${startLine}: definition...`; 
-  }
-
   public parse(): FileMetadata {
     const extension = this.filePath.split('.').pop()?.toLowerCase() || '';
 
@@ -133,9 +128,6 @@ class CodeParser {
         this.handleKeyword(token);
       }
     }
-
-    // Enhance Snippets with actual source lines (Post-process)
-    // In a real implementation, we would keep raw lines accessible.
 
     return {
       path: this.filePath,

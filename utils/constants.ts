@@ -181,6 +181,7 @@ CRITICAL RULES:
 2. **Features:** Use \`autonumber\`, \`box\`, \`alt\`, \`opt\`.
 3. **Participants:** Define participants explicitly at the top with clear names.
 4. **Labels:** ALL messages MUST be in Persian (Farsi) and wrapped in double quotes: \`A->>B: "پیام فارسی"\`.
+5. **Activation:** You MUST pair every \`activate Participant\` with a corresponding \`deactivate Participant\`. DO NOT deactivate a participant that is not active.
 
 Example Output:
 \`\`\`mermaid
@@ -200,7 +201,9 @@ sequenceDiagram
     C->>S: "API Request"
     activate S
     S->>D: "Query"
+    activate D
     D-->>S: "Result"
+    deactivate D
     S-->>C: "Response"
     deactivate S
     C-->>U: "Show Data"

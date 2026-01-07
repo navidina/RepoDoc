@@ -97,15 +97,15 @@ const MermaidRenderer = ({ code }: { code: string }) => {
   useEffect(() => {
     let isMounted = true;
 
-    const renderDiagram = async () => {
-      if (!code) return;
+    const renderDiagram = async (codeToRender: string, retry = true) => {
+      if (!codeToRender) return;
       try {
         if (isMounted) {
             setIsError(false);
             setErrorMsg('');
         }
 
-        const cleanCode = fixMermaidSyntax(code);
+        const cleanCode = fixMermaidSyntax(codeToRender);
 
         const validStarts = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram', 'pie', 'gitGraph'];
         if (!validStarts.some(start => cleanCode.startsWith(start))) {
@@ -139,6 +139,17 @@ const MermaidRenderer = ({ code }: { code: string }) => {
         if (isMounted) setSvg(svg);
       } catch (error: any) {
         console.error('Mermaid rendering failed:', error);
+
+        // Auto-Recovery for specific errors (Activation/Deactivation mismatches)
+        // If we get "inactive participant" or general parser error on sequence diagram, we strip activations.
+        if (retry && error.message && (error.message.includes('inactive participant') || error.message.includes('activate'))) {
+             console.warn('Attempting to fix activation error by stripping activation commands...');
+             // Strip all activate/deactivate lines (safe fallback for visuals)
+             const simplifiedCode = codeToRender.replace(/^\s*(activate|deactivate)\s+.*$/gm, '');
+             await renderDiagram(simplifiedCode, false);
+             return;
+        }
+
         if (isMounted) {
             setIsError(true);
             setErrorMsg(error.message || 'Syntax Error in Diagram Code');
@@ -146,7 +157,7 @@ const MermaidRenderer = ({ code }: { code: string }) => {
       }
     };
 
-    renderDiagram();
+    renderDiagram(code);
 
     return () => { isMounted = false; };
   }, [code]);
