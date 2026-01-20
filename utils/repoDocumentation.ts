@@ -17,26 +17,120 @@ const selectByType = <T,>(type: RepoSummary['type'], options: Record<RepoSummary
   return options[type];
 };
 
-const buildAdaptiveToc = (type: RepoSummary['type']) => {
+const parsePackageJsonDeps = (content?: string) => {
+  if (!content) return [] as string[];
+  try {
+    const parsed = JSON.parse(content);
+    return [
+      ...Object.keys(parsed.dependencies || {}),
+      ...Object.keys(parsed.devDependencies || {})
+    ];
+  } catch (error) {
+    return [];
+  }
+};
+
+const detectRepoSignals = (filePaths: string[], dependencies: string[]) => {
+  const lowerDeps = new Set(dependencies.map(dep => dep.toLowerCase()));
+  const pathSet = filePaths.map(path => path.toLowerCase());
+
+  const pickFirst = (labels: string[], candidates: string[]) => {
+    for (const candidate of candidates) {
+      if (lowerDeps.has(candidate)) return labels[candidates.indexOf(candidate)] ?? candidate;
+    }
+    return '';
+  };
+
+  const uiFramework = pickFirst(
+    ['React', 'Next.js', 'Vue', 'Nuxt', 'Svelte', 'Angular', 'Solid', 'Astro'],
+    ['react', 'next', 'vue', 'nuxt', 'svelte', '@angular/core', 'solid-js', 'astro']
+  );
+
+  const router = pickFirst(
+    ['React Router', 'Next.js Router', 'Vue Router', 'TanStack Router', 'Angular Router'],
+    ['react-router', 'next', 'vue-router', '@tanstack/router', '@angular/router']
+  );
+
+  const stateManagement = pickFirst(
+    ['Redux', 'Zustand', 'MobX', 'Pinia', 'Vuex', 'Recoil', 'TanStack Query'],
+    ['redux', 'zustand', 'mobx', 'pinia', 'vuex', 'recoil', '@tanstack/react-query']
+  );
+
+  const accessibility = lowerDeps.has('eslint-plugin-jsx-a11y') ? 'a11y linting' : '';
+
+  const auth = pickFirst(
+    ['JWT', 'Passport', 'Auth0', 'NextAuth', 'Supabase Auth'],
+    ['jsonwebtoken', 'passport', 'auth0', 'next-auth', '@supabase/supabase-js']
+  );
+
+  const rateLimiting = pickFirst(
+    ['express-rate-limit', 'rate-limiter-flexible'],
+    ['express-rate-limit', 'rate-limiter-flexible']
+  );
+
+  const monitoring = pickFirst(
+    ['Sentry', 'OpenTelemetry', 'Prometheus'],
+    ['@sentry/node', '@sentry/react', '@opentelemetry/api', 'prom-client']
+  );
+
+  const database = pickFirst(
+    ['Prisma', 'Mongoose', 'Sequelize', 'TypeORM', 'Drizzle', 'Supabase'],
+    ['prisma', 'mongoose', 'sequelize', 'typeorm', 'drizzle-orm', '@supabase/supabase-js']
+  );
+
+  const queue = pickFirst(
+    ['BullMQ', 'Bull', 'Bee-Queue', 'RabbitMQ'],
+    ['bullmq', 'bull', 'bee-queue', 'amqplib']
+  );
+
+  const hasComponentsDir = pathSet.some(path => path.includes('/components/'));
+  const hasPagesDir = pathSet.some(path => path.includes('/pages/'));
+  const hasRoutesDir = pathSet.some(path => path.includes('/routes/') || path.includes('/api/'));
+  const hasModelsDir = pathSet.some(path => path.includes('/models/') || path.includes('/schema'));
+  const hasMigrations = pathSet.some(path => path.includes('/migrations/') || path.includes('migration'));
+
+  return {
+    uiFramework,
+    router,
+    stateManagement,
+    accessibility,
+    auth,
+    rateLimiting,
+    monitoring,
+    database,
+    queue,
+    hasComponentsDir,
+    hasPagesDir,
+    hasRoutesDir,
+    hasModelsDir,
+    hasMigrations
+  };
+};
+
+const buildAdaptiveToc = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
+  const frontendItems = [
+    `Design System و الگوی طراحی${signals.uiFramework ? ` (${signals.uiFramework})` : ''}`,
+    `Components Library و ترکیب کامپوننت‌ها${signals.hasComponentsDir ? ' (پوشه components موجود است)' : ''}`,
+    `Routing و مسیرهای اصلی${signals.router ? ` (${signals.router})` : ''}`,
+    `State Management و چرخه داده${signals.stateManagement ? ` (${signals.stateManagement})` : ''}`,
+    `Accessibility و تجربه کاربر${signals.accessibility ? ` (${signals.accessibility})` : ''}`
+  ];
+
+  const backendItems = [
+    `API Contracts و استانداردهای پاسخ${signals.hasRoutesDir ? ' (مسیرهای API شناسایی شد)' : ''}`,
+    `دیتابیس، مدل داده و مهاجرت‌ها (Migrations)${signals.database ? ` (${signals.database})` : ''}`,
+    `Authentication و مدیریت دسترسی${signals.auth ? ` (${signals.auth})` : ''}`,
+    `Rate Limiting و محافظت از سرویس${signals.rateLimiting ? ` (${signals.rateLimiting})` : ''}`,
+    `Monitoring و Observability${signals.monitoring ? ` (${signals.monitoring})` : ''}`
+  ];
+
   return selectByType(type, {
-    frontend: [
-      'Design System و الگوی طراحی',
-      'Components Library و ترکیب کامپوننت‌ها',
-      'Routing و مسیرهای اصلی',
-      'State Management و چرخه داده',
-      'Accessibility و تجربه کاربر'
-    ],
-    backend: [
-      'API Contracts و استانداردهای پاسخ',
-      'دیتابیس، مدل داده و مهاجرت‌ها (Migrations)',
-      'Authentication و مدیریت دسترسی',
-      'Rate Limiting و محافظت از سرویس',
-      'Monitoring و Observability'
-    ],
+    frontend: frontendItems,
+    backend: backendItems,
     fullstack: [
-      'بخش فرانت‌اند: Design System، Components، Routing',
-      'بخش بک‌اند: API Contracts، دیتابیس، Authentication',
-      'بخش همگرا: Contractهای مشترک و مدل‌های داده',
+      `بخش فرانت‌اند: ${frontendItems.slice(0, 3).join('، ')}`,
+      `بخش بک‌اند: ${backendItems.slice(0, 3).join('، ')}`,
+      `بخش همگرا: Contractهای مشترک و مدل‌های داده${signals.database ? ` (${signals.database})` : ''}`,
       'End-to-End Flow از UI تا API و DB',
       'استراتژی‌های استقرار هماهنگ'
     ],
@@ -50,22 +144,22 @@ const buildAdaptiveToc = (type: RepoSummary['type']) => {
   });
 };
 
-const buildDiagramPriorities = (type: RepoSummary['type']) => {
+const buildDiagramPriorities = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
       'نمودار جریان UI/UX برای سناریوهای اصلی',
-      'معماری کامپوننت‌ها و ارتباط بین آن‌ها',
+      `معماری کامپوننت‌ها و ارتباط بین آن‌ها${signals.hasComponentsDir ? ' (کامپوننت‌های شناسایی‌شده)' : ''}`,
       'نمودار حالت‌ها (State Transitions)'
     ],
     backend: [
-      'ERD برای مدل داده و روابط',
+      `ERD برای مدل داده و روابط${signals.database ? ` (${signals.database})` : ''}`,
       'نمودار توالی درخواست/پاسخ',
-      'معماری سرویس‌ها و وابستگی‌های داخلی'
+      `معماری سرویس‌ها و وابستگی‌های داخلی${signals.hasRoutesDir ? ' (مسیرهای سرویس شناسایی شد)' : ''}`
     ],
     fullstack: [
       'نمودار End-to-End مسیر داده از UI تا DB',
       'نمودار توالی برای تعامل‌های اصلی',
-      'مرزبندی دامنه و سرویس‌ها'
+      `مرزبندی دامنه و سرویس‌ها${signals.hasRoutesDir ? ' (مرز API شناسایی شد)' : ''}`
     ],
     unknown: [
       'نمودار اجزای اصلی سیستم',
@@ -75,18 +169,18 @@ const buildDiagramPriorities = (type: RepoSummary['type']) => {
   });
 };
 
-const buildRunDeployNotes = (type: RepoSummary['type']) => {
+const buildRunDeployNotes = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
-      'اشاره به build pipeline و خروجی استاتیک',
+      `اشاره به build pipeline و خروجی استاتیک${signals.uiFramework ? ` (${signals.uiFramework})` : ''}`,
       'Static hosting و پیکربندی CDN',
       'متغیرهای محیطی مرتبط با APIها',
       'پیکربندی CI برای lint/test/build'
     ],
     backend: [
       'تعریف env vars و مدیریت secrets',
-      'اجرای migrations و نسخه‌بندی دیتابیس',
-      'راه‌اندازی workerها و queueها',
+      `اجرای migrations و نسخه‌بندی دیتابیس${signals.hasMigrations ? ' (مهاجرت‌ها شناسایی شد)' : ''}`,
+      `راه‌اندازی workerها و queueها${signals.queue ? ` (${signals.queue})` : ''}`,
       'استقرار روی VM یا container (Docker)'
     ],
     fullstack: [
@@ -103,16 +197,16 @@ const buildRunDeployNotes = (type: RepoSummary['type']) => {
   });
 };
 
-const buildExampleFocus = (type: RepoSummary['type']) => {
+const buildExampleFocus = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
       'مثال‌های Component composition و ساخت کامپوننت‌های قابل‌استفاده مجدد',
-      'مثال‌های استفاده از props و الگوهای data flow',
-      'مثال‌های hooks برای مدیریت state و side effects'
+      `مثال‌های استفاده از props و الگوهای data flow${signals.uiFramework ? ` (${signals.uiFramework})` : ''}`,
+      `مثال‌های hooks برای مدیریت state و side effects${signals.stateManagement ? ` (${signals.stateManagement})` : ''}`
     ],
     backend: [
       'مثال‌های طراحی endpoint و استانداردسازی پاسخ‌ها',
-      'مثال‌های query flows از API تا دیتابیس',
+      `مثال‌های query flows از API تا دیتابیس${signals.database ? ` (${signals.database})` : ''}`,
       'مثال‌های service layers و جداسازی لایه بیزینس'
     ],
     fullstack: [
@@ -127,17 +221,17 @@ const buildExampleFocus = (type: RepoSummary['type']) => {
   });
 };
 
-const buildTestingGuide = (type: RepoSummary['type']) => {
+const buildTestingGuide = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
       'UI tests با Playwright/Cypress',
       'Snapshot tests برای کامپوننت‌ها',
-      'تست دسترسی‌پذیری (a11y)'
+      `تست دسترسی‌پذیری (a11y)${signals.accessibility ? ' (بر اساس ابزار شناسایی‌شده)' : ''}`
     ],
     backend: [
-      'Integration tests برای APIها',
-      'Contract tests برای هماهنگی سرویس‌ها',
-      'Load tests برای پایداری در فشار'
+      `Integration tests برای APIها${signals.hasRoutesDir ? ' (مسیرهای API شناسایی شد)' : ''}`,
+      `Contract tests برای هماهنگی سرویس‌ها${signals.auth ? ` (${signals.auth})` : ''}`,
+      `Load tests برای پایداری در فشار${signals.monitoring ? ` (${signals.monitoring})` : ''}`
     ],
     fullstack: [
       'تست end-to-end با داده واقعی',
@@ -151,21 +245,21 @@ const buildTestingGuide = (type: RepoSummary['type']) => {
   });
 };
 
-const buildOnboardingPath = (type: RepoSummary['type']) => {
+const buildOnboardingPath = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
-      'شروع از Design/Components و Design System',
-      'مرور صفحات کلیدی و الگوی روتینگ',
-      'آشنایی با state و data fetching'
+      `شروع از Design/Components و Design System${signals.hasComponentsDir ? ' (components موجود است)' : ''}`,
+      `مرور صفحات کلیدی و الگوی روتینگ${signals.router ? ` (${signals.router})` : ''}`,
+      `آشنایی با state و data fetching${signals.stateManagement ? ` (${signals.stateManagement})` : ''}`
     ],
     backend: [
-      'شروع از API و Data Models',
+      `شروع از API و Data Models${signals.hasModelsDir ? ' (مدل‌ها شناسایی شد)' : ''}`,
       'شناخت سرویس‌ها و لایه‌های بیزینس',
-      'درک روند احراز هویت و امنیت'
+      `درک روند احراز هویت و امنیت${signals.auth ? ` (${signals.auth})` : ''}`
     ],
     fullstack: [
       'مسیر مرحله‌ای UI → API → DB',
-      'مطالعه قراردادهای مشترک',
+      `مطالعه قراردادهای مشترک${signals.database ? ` (${signals.database})` : ''}`,
       'شناخت استقرار و پیکربندی‌ها'
     ],
     unknown: [
@@ -175,26 +269,38 @@ const buildOnboardingPath = (type: RepoSummary['type']) => {
   });
 };
 
-const buildGlossary = (type: RepoSummary['type']) => {
+const buildGlossary = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
-    frontend: ['Component', 'Props', 'State', 'Routing', 'Accessibility'],
-    backend: ['Endpoint', 'Schema', 'Migration', 'Middleware', 'Rate Limiting'],
+    frontend: [
+      'Component',
+      'Props',
+      'State',
+      `Routing${signals.router ? ` (${signals.router})` : ''}`,
+      'Accessibility'
+    ],
+    backend: [
+      'Endpoint',
+      `Schema${signals.database ? ` (${signals.database})` : ''}`,
+      'Migration',
+      'Middleware',
+      'Rate Limiting'
+    ],
     fullstack: ['Contract', 'API', 'DTO', 'Session', 'Pipeline'],
     unknown: ['Module', 'Service', 'Config', 'Pipeline', 'Dependency']
   });
 };
 
-const buildRisks = (type: RepoSummary['type']) => {
+const buildRisks = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
       'Performance bottlenecks در render',
-      'افزایش bundle size و تاثیر بر زمان بارگذاری',
+      `افزایش bundle size و تاثیر بر زمان بارگذاری${signals.uiFramework ? ` (${signals.uiFramework})` : ''}`,
       'ناهماهنگی بین کامپوننت‌ها و UX'
     ],
     backend: [
       'افزایش latency در مسیرهای پرمصرف',
-      'ریسک‌های امنیتی و کنترل دسترسی',
-      'چالش‌های consistency و تراکنش‌ها'
+      `ریسک‌های امنیتی و کنترل دسترسی${signals.auth ? ` (${signals.auth})` : ''}`,
+      `چالش‌های consistency و تراکنش‌ها${signals.database ? ` (${signals.database})` : ''}`
     ],
     fullstack: [
       'ناهماهنگی قراردادهای مشترک',
@@ -208,17 +314,17 @@ const buildRisks = (type: RepoSummary['type']) => {
   });
 };
 
-const buildFaq = (type: RepoSummary['type']) => {
+const buildFaq = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
       'چطور theme را تغییر دهیم؟',
-      'چطور یک صفحه جدید اضافه کنیم؟',
-      'چطور داده‌ها را cache کنیم؟'
+      `چطور یک صفحه جدید اضافه کنیم؟${signals.router ? ` (${signals.router})` : ''}`,
+      `چطور داده‌ها را cache کنیم؟${signals.stateManagement ? ` (${signals.stateManagement})` : ''}`
     ],
     backend: [
-      'چطور endpoint جدید اضافه کنیم؟',
-      'چطور migration بنویسیم؟',
-      'چطور rate limiting را تنظیم کنیم؟'
+      `چطور endpoint جدید اضافه کنیم؟${signals.hasRoutesDir ? ' (مسیرهای API شناسایی شد)' : ''}`,
+      `چطور migration بنویسیم؟${signals.hasMigrations ? ' (مهاجرت‌ها موجود است)' : ''}`,
+      `چطور rate limiting را تنظیم کنیم؟${signals.rateLimiting ? ` (${signals.rateLimiting})` : ''}`
     ],
     fullstack: [
       'چطور قراردادهای مشترک را همگام نگه داریم؟',
@@ -232,21 +338,30 @@ const buildFaq = (type: RepoSummary['type']) => {
   });
 };
 
-export const buildRepoInsights = (summary: RepoSummary | null, topLanguage?: string) => {
+export const buildRepoInsights = (
+  summary: RepoSummary | null,
+  options: {
+    topLanguage?: string;
+    filePaths?: string[];
+    configContents?: Record<string, string>;
+  } = {}
+) => {
   if (!summary) return { readerSummary: '', insightsMarkdown: '' };
 
   const typeLabel = formatTypeLabel(summary.type);
-  const tocItems = buildAdaptiveToc(summary.type);
-  const diagramItems = buildDiagramPriorities(summary.type);
-  const runDeployItems = buildRunDeployNotes(summary.type);
-  const exampleItems = buildExampleFocus(summary.type);
-  const testingItems = buildTestingGuide(summary.type);
-  const onboardingItems = buildOnboardingPath(summary.type);
-  const glossaryItems = buildGlossary(summary.type);
-  const riskItems = buildRisks(summary.type);
-  const faqItems = buildFaq(summary.type);
+  const dependencies = parsePackageJsonDeps(options.configContents?.['package.json']);
+  const signals = detectRepoSignals(options.filePaths ?? [], dependencies);
+  const tocItems = buildAdaptiveToc(summary.type, signals);
+  const diagramItems = buildDiagramPriorities(summary.type, signals);
+  const runDeployItems = buildRunDeployNotes(summary.type, signals);
+  const exampleItems = buildExampleFocus(summary.type, signals);
+  const testingItems = buildTestingGuide(summary.type, signals);
+  const onboardingItems = buildOnboardingPath(summary.type, signals);
+  const glossaryItems = buildGlossary(summary.type, signals);
+  const riskItems = buildRisks(summary.type, signals);
+  const faqItems = buildFaq(summary.type, signals);
 
-  const readerSummary = `این پروژه **${typeLabel}** است و تمرکز اصلی مستندات روی بخش‌های کلیدی مرتبط با آن خواهد بود${topLanguage ? ` (زبان غالب: ${topLanguage})` : ''}.`;
+  const readerSummary = `این پروژه **${typeLabel}** است و تمرکز اصلی مستندات روی بخش‌های کلیدی مرتبط با آن خواهد بود${options.topLanguage ? ` (زبان غالب: ${options.topLanguage})` : ''}.`;
 
   const insightsMarkdown = [
     '## 🧭 بینش‌های هوشمند مبتنی بر نوع پروژه',

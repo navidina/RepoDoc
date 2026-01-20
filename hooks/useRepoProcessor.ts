@@ -226,10 +226,17 @@ export const useRepoProcessor = () => {
         });
         setStats(processedStats);
         statsMarkdown = `\n| زبان / تکنولوژی | تعداد خط کد (LOC) | درصد پروژه |\n| :--- | :--- | :--- |\n${processedStats.map(s => `| **${s.lang}** | ${s.lines.toLocaleString()} خط | ${s.percent}% |`).join('\n')}\n`;
-        ({ readerSummary, insightsMarkdown: repoInsightsMarkdown } = buildRepoInsights(detectedSummary, processedStats[0]?.lang));
+        ({ readerSummary, insightsMarkdown: repoInsightsMarkdown } = buildRepoInsights(detectedSummary, {
+          topLanguage: processedStats[0]?.lang,
+          filePaths: sourceFiles.map(file => file.path),
+          configContents: configFileContents
+        }));
       }
       if (!repoInsightsMarkdown) {
-        ({ readerSummary, insightsMarkdown: repoInsightsMarkdown } = buildRepoInsights(detectedSummary));
+        ({ readerSummary, insightsMarkdown: repoInsightsMarkdown } = buildRepoInsights(detectedSummary, {
+          filePaths: sourceFiles.map(file => file.path),
+          configContents: configFileContents
+        }));
       }
 
       // --- Documentation Generation Pipeline ---
