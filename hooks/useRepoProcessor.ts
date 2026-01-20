@@ -6,7 +6,7 @@ import { checkOllamaConnection, generateCompletion } from '../services/ollamaSer
 import { extractFileMetadata, resolveReferences } from '../services/codeParser';
 import { LocalVectorStore } from '../services/vectorStore';
 import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent } from '../services/githubService';
-import { generateFileHeaderHTML, extractMermaidCode } from '../utils/markdownHelpers';
+import { generateFileHeaderHTML, extractMermaidCode, normalizeUseCaseDiagram } from '../utils/markdownHelpers';
 import { detectRepoSummary } from '../utils/repoDetection';
 import { buildRepoInsights } from '../utils/repoDocumentation';
 
@@ -331,7 +331,8 @@ export const useRepoProcessor = () => {
       }
       if (detectedSummary?.type === 'frontend') {
          const useCaseContext = `Project Structure:\n${fileTree}\n\nSummaries:\n${fileSummaries.join('\n')}`;
-         parts.useCase = extractMermaidCode(await generateCompletion(config, useCaseContext + strictModeSuffix, PROMPT_LEVEL_10_USE_CASE));
+         const rawUseCase = await generateCompletion(config, useCaseContext + strictModeSuffix, PROMPT_LEVEL_10_USE_CASE);
+         parts.useCase = normalizeUseCaseDiagram(extractMermaidCode(rawUseCase));
          setGeneratedDoc(assembleDoc());
       }
 
