@@ -2,9 +2,19 @@
 
 import { OllamaConfig, ChatMessage } from '../types';
 
+const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 8000) => {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+};
+
 export const checkOllamaConnection = async (config: OllamaConfig): Promise<boolean> => {
   try {
-    const response = await fetch(`${config.baseUrl}/api/tags`);
+    const response = await fetchWithTimeout(`${config.baseUrl}/api/tags`);
     return response.ok;
   } catch (e) {
     return false;
@@ -17,7 +27,7 @@ export const generateCompletion = async (
   system: string
 ): Promise<string> => {
   try {
-    const response = await fetch(`${config.baseUrl}/api/chat`, {
+    const response = await fetchWithTimeout(`${config.baseUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -53,7 +63,7 @@ export const sendChatRequest = async (
   messages: ChatMessage[]
 ): Promise<string> => {
   try {
-    const response = await fetch(`${config.baseUrl}/api/chat`, {
+    const response = await fetchWithTimeout(`${config.baseUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -87,7 +97,7 @@ export const generateEmbeddings = async (
   prompt: string
 ): Promise<number[]> => {
   try {
-    const response = await fetch(`${config.baseUrl}/api/embeddings`, {
+    const response = await fetchWithTimeout(`${config.baseUrl}/api/embeddings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
