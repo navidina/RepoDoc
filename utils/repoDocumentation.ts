@@ -30,6 +30,10 @@ const parsePackageJsonDeps = (content?: string) => {
   }
 };
 
+const buildSampleList = (items: string[], limit = 4) => {
+  return items.slice(0, limit);
+};
+
 const detectRepoSignals = (filePaths: string[], dependencies: string[]) => {
   const lowerDeps = new Set(dependencies.map(dep => dep.toLowerCase()));
   const pathSet = filePaths.map(path => path.toLowerCase());
@@ -83,11 +87,12 @@ const detectRepoSignals = (filePaths: string[], dependencies: string[]) => {
     ['bullmq', 'bull', 'bee-queue', 'amqplib']
   );
 
-  const hasComponentsDir = pathSet.some(path => path.includes('/components/'));
-  const hasPagesDir = pathSet.some(path => path.includes('/pages/'));
-  const hasRoutesDir = pathSet.some(path => path.includes('/routes/') || path.includes('/api/'));
-  const hasModelsDir = pathSet.some(path => path.includes('/models/') || path.includes('/schema'));
-  const hasMigrations = pathSet.some(path => path.includes('/migrations/') || path.includes('migration'));
+  const componentPaths = filePaths.filter(path => path.toLowerCase().includes('/components/'));
+  const pagePaths = filePaths.filter(path => path.toLowerCase().includes('/pages/'));
+  const routePaths = filePaths.filter(path => path.toLowerCase().includes('/routes/') || path.toLowerCase().includes('/api/'));
+  const modelPaths = filePaths.filter(path => path.toLowerCase().includes('/models/') || path.toLowerCase().includes('/schema'));
+  const migrationPaths = filePaths.filter(path => path.toLowerCase().includes('/migrations/') || path.toLowerCase().includes('migration'));
+  const servicePaths = filePaths.filter(path => path.toLowerCase().includes('/services/'));
 
   return {
     uiFramework,
@@ -99,25 +104,26 @@ const detectRepoSignals = (filePaths: string[], dependencies: string[]) => {
     monitoring,
     database,
     queue,
-    hasComponentsDir,
-    hasPagesDir,
-    hasRoutesDir,
-    hasModelsDir,
-    hasMigrations
+    componentPaths,
+    pagePaths,
+    routePaths,
+    modelPaths,
+    migrationPaths,
+    servicePaths
   };
 };
 
 const buildAdaptiveToc = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   const frontendItems = [
     `Design System و الگوی طراحی${signals.uiFramework ? ` (${signals.uiFramework})` : ''}`,
-    `Components Library و ترکیب کامپوننت‌ها${signals.hasComponentsDir ? ' (پوشه components موجود است)' : ''}`,
+    `Components Library و ترکیب کامپوننت‌ها (تعداد: ${signals.componentPaths.length})`,
     `Routing و مسیرهای اصلی${signals.router ? ` (${signals.router})` : ''}`,
     `State Management و چرخه داده${signals.stateManagement ? ` (${signals.stateManagement})` : ''}`,
     `Accessibility و تجربه کاربر${signals.accessibility ? ` (${signals.accessibility})` : ''}`
   ];
 
   const backendItems = [
-    `API Contracts و استانداردهای پاسخ${signals.hasRoutesDir ? ' (مسیرهای API شناسایی شد)' : ''}`,
+    `API Contracts و استانداردهای پاسخ (تعداد مسیرها: ${signals.routePaths.length})`,
     `دیتابیس، مدل داده و مهاجرت‌ها (Migrations)${signals.database ? ` (${signals.database})` : ''}`,
     `Authentication و مدیریت دسترسی${signals.auth ? ` (${signals.auth})` : ''}`,
     `Rate Limiting و محافظت از سرویس${signals.rateLimiting ? ` (${signals.rateLimiting})` : ''}`,
@@ -148,18 +154,18 @@ const buildDiagramPriorities = (type: RepoSummary['type'], signals: ReturnType<t
   return selectByType(type, {
     frontend: [
       'نمودار جریان UI/UX برای سناریوهای اصلی',
-      `معماری کامپوننت‌ها و ارتباط بین آن‌ها${signals.hasComponentsDir ? ' (کامپوننت‌های شناسایی‌شده)' : ''}`,
+      `معماری کامپوننت‌ها و ارتباط بین آن‌ها${signals.componentPaths.length ? ' (کامپوننت‌های شناسایی‌شده)' : ''}`,
       'نمودار حالت‌ها (State Transitions)'
     ],
     backend: [
       `ERD برای مدل داده و روابط${signals.database ? ` (${signals.database})` : ''}`,
       'نمودار توالی درخواست/پاسخ',
-      `معماری سرویس‌ها و وابستگی‌های داخلی${signals.hasRoutesDir ? ' (مسیرهای سرویس شناسایی شد)' : ''}`
+      `معماری سرویس‌ها و وابستگی‌های داخلی${signals.routePaths.length ? ' (مسیرهای سرویس شناسایی شد)' : ''}`
     ],
     fullstack: [
       'نمودار End-to-End مسیر داده از UI تا DB',
       'نمودار توالی برای تعامل‌های اصلی',
-      `مرزبندی دامنه و سرویس‌ها${signals.hasRoutesDir ? ' (مرز API شناسایی شد)' : ''}`
+      `مرزبندی دامنه و سرویس‌ها${signals.routePaths.length ? ' (مرز API شناسایی شد)' : ''}`
     ],
     unknown: [
       'نمودار اجزای اصلی سیستم',
@@ -179,7 +185,7 @@ const buildRunDeployNotes = (type: RepoSummary['type'], signals: ReturnType<type
     ],
     backend: [
       'تعریف env vars و مدیریت secrets',
-      `اجرای migrations و نسخه‌بندی دیتابیس${signals.hasMigrations ? ' (مهاجرت‌ها شناسایی شد)' : ''}`,
+      `اجرای migrations و نسخه‌بندی دیتابیس${signals.migrationPaths.length ? ' (مهاجرت‌ها شناسایی شد)' : ''}`,
       `راه‌اندازی workerها و queueها${signals.queue ? ` (${signals.queue})` : ''}`,
       'استقرار روی VM یا container (Docker)'
     ],
@@ -229,7 +235,7 @@ const buildTestingGuide = (type: RepoSummary['type'], signals: ReturnType<typeof
       `تست دسترسی‌پذیری (a11y)${signals.accessibility ? ' (بر اساس ابزار شناسایی‌شده)' : ''}`
     ],
     backend: [
-      `Integration tests برای APIها${signals.hasRoutesDir ? ' (مسیرهای API شناسایی شد)' : ''}`,
+      `Integration tests برای APIها${signals.routePaths.length ? ' (مسیرهای API شناسایی شد)' : ''}`,
       `Contract tests برای هماهنگی سرویس‌ها${signals.auth ? ` (${signals.auth})` : ''}`,
       `Load tests برای پایداری در فشار${signals.monitoring ? ` (${signals.monitoring})` : ''}`
     ],
@@ -248,12 +254,12 @@ const buildTestingGuide = (type: RepoSummary['type'], signals: ReturnType<typeof
 const buildOnboardingPath = (type: RepoSummary['type'], signals: ReturnType<typeof detectRepoSignals>) => {
   return selectByType(type, {
     frontend: [
-      `شروع از Design/Components و Design System${signals.hasComponentsDir ? ' (components موجود است)' : ''}`,
+      `شروع از Design/Components و Design System${signals.componentPaths.length ? ' (components موجود است)' : ''}`,
       `مرور صفحات کلیدی و الگوی روتینگ${signals.router ? ` (${signals.router})` : ''}`,
       `آشنایی با state و data fetching${signals.stateManagement ? ` (${signals.stateManagement})` : ''}`
     ],
     backend: [
-      `شروع از API و Data Models${signals.hasModelsDir ? ' (مدل‌ها شناسایی شد)' : ''}`,
+      `شروع از API و Data Models${signals.modelPaths.length ? ' (مدل‌ها شناسایی شد)' : ''}`,
       'شناخت سرویس‌ها و لایه‌های بیزینس',
       `درک روند احراز هویت و امنیت${signals.auth ? ` (${signals.auth})` : ''}`
     ],
@@ -322,8 +328,8 @@ const buildFaq = (type: RepoSummary['type'], signals: ReturnType<typeof detectRe
       `چطور داده‌ها را cache کنیم؟${signals.stateManagement ? ` (${signals.stateManagement})` : ''}`
     ],
     backend: [
-      `چطور endpoint جدید اضافه کنیم؟${signals.hasRoutesDir ? ' (مسیرهای API شناسایی شد)' : ''}`,
-      `چطور migration بنویسیم؟${signals.hasMigrations ? ' (مهاجرت‌ها موجود است)' : ''}`,
+      `چطور endpoint جدید اضافه کنیم؟${signals.routePaths.length ? ' (مسیرهای API شناسایی شد)' : ''}`,
+      `چطور migration بنویسیم؟${signals.migrationPaths.length ? ' (مهاجرت‌ها موجود است)' : ''}`,
       `چطور rate limiting را تنظیم کنیم؟${signals.rateLimiting ? ` (${signals.rateLimiting})` : ''}`
     ],
     fullstack: [
@@ -365,6 +371,19 @@ export const buildRepoInsights = (
 
   const insightsMarkdown = [
     '## 🧭 بینش‌های هوشمند مبتنی بر نوع پروژه',
+    '',
+    '### 🔍 یافته‌های واقعی از مخزن',
+    `- فریم‌ورک UI: ${signals.uiFramework || 'نامشخص'}`,
+    `- روتینگ: ${signals.router || 'نامشخص'}`,
+    `- مدیریت state: ${signals.stateManagement || 'نامشخص'}`,
+    `- دیتابیس/ORM: ${signals.database || 'نامشخص'}`,
+    `- احراز هویت: ${signals.auth || 'نامشخص'}`,
+    `- Queue/Worker: ${signals.queue || 'نامشخص'}`,
+    `- مسیرهای Components (نمونه): ${buildSampleList(signals.componentPaths).join(' | ') || 'یافت نشد'}`,
+    `- مسیرهای Pages (نمونه): ${buildSampleList(signals.pagePaths).join(' | ') || 'یافت نشد'}`,
+    `- مسیرهای Routes/API (نمونه): ${buildSampleList(signals.routePaths).join(' | ') || 'یافت نشد'}`,
+    `- مسیرهای Models/Schema (نمونه): ${buildSampleList(signals.modelPaths).join(' | ') || 'یافت نشد'}`,
+    `- مسیرهای Migrations (نمونه): ${buildSampleList(signals.migrationPaths).join(' | ') || 'یافت نشد'}`,
     '',
     '### 1) ساختار پیشنهادی مستندات (Adaptive TOC)',
     tocItems.map(item => `- ${item}`).join('\n'),
