@@ -1,12 +1,14 @@
 
 import { useState, useEffect } from 'react';
-import { OllamaConfig, ProcessingLog, ProcessedFile, CodeSymbol } from '../types';
-import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA } from '../utils/constants';
+import { OllamaConfig, ProcessingLog, ProcessedFile, CodeSymbol, RepoSummary } from '../types';
+import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA, PROMPT_LEVEL_10_USE_CASE } from '../utils/constants';
 import { checkOllamaConnection, generateCompletion } from '../services/ollamaService';
 import { extractFileMetadata, resolveReferences } from '../services/codeParser';
 import { LocalVectorStore } from '../services/vectorStore';
 import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent } from '../services/githubService';
 import { generateFileHeaderHTML, extractMermaidCode } from '../utils/markdownHelpers';
+import { detectRepoSummary } from '../utils/repoDetection';
+import { buildRepoInsights } from '../utils/repoDocumentation';
 
 interface UseRepoProcessorProps {
   config: OllamaConfig;
@@ -44,6 +46,14 @@ export const useRepoProcessor = () => {
       return saved ? JSON.parse(saved).stats || [] : [];
     } catch (e) { return []; }
   });
+
+  const [repoSummary, setRepoSummary] = useState<RepoSummary | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved).repoSummary || null : null;
+    } catch (e) { return null; }
+  });
   
   // Updated: Store Full Symbol Table
   const [knowledgeGraph, setKnowledgeGraph] = useState<Record<string, CodeSymbol>>(() => {
@@ -66,6 +76,7 @@ export const useRepoProcessor = () => {
         logs,
         generatedDoc,
         stats,
+        repoSummary,
         knowledgeGraph,
         lastUpdated: new Date().toISOString()
       };
@@ -73,7 +84,7 @@ export const useRepoProcessor = () => {
     } catch (e) {
       console.warn('Failed to save session to localStorage:', e);
     }
-  }, [logs, generatedDoc, stats, knowledgeGraph, isProcessing]);
+  }, [logs, generatedDoc, stats, repoSummary, knowledgeGraph, isProcessing]);
 
 
   const addLog = (message: string, type: ProcessingLog['type'] = 'info') => {
@@ -86,6 +97,7 @@ export const useRepoProcessor = () => {
     setGeneratedDoc('');
     setLogs([]);
     setStats([]);
+    setRepoSummary(null);
     setKnowledgeGraph({});
     setHasContext(false);
     
@@ -100,8 +112,11 @@ export const useRepoProcessor = () => {
 
       let fileTree = '';
       const configContents: string[] = [];
+      const configFileContents: Record<string, string> = {};
       const sourceFiles: ProcessedFile[] = [];
       const languageStats: Record<string, number> = {};
+      let repoName = '';
+      let detectedSummary: RepoSummary | null = null;
 
       addLog('فاز ۱: اسکن لغوی و توکن‌بندی فایل‌ها (Lexical Analysis)...', 'info');
 
@@ -132,6 +147,9 @@ export const useRepoProcessor = () => {
 
           for (const file of fileList) {
             const filePath = file.webkitRelativePath || file.name;
+            if (!repoName && filePath.includes('/')) {
+              repoName = filePath.split('/')[0];
+            }
             const pathParts = filePath.split('/');
             if (pathParts.some(part => IGNORED_DIRS.has(part))) continue;
             const extension = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -141,7 +159,10 @@ export const useRepoProcessor = () => {
             
             if (CONFIG_FILES.has(file.name) || file.size < 100000) {
                const content = await readFileContent(file);
-               if (CONFIG_FILES.has(file.name)) configContents.push(`\n--- ${file.name} ---\n${content}\n`);
+               if (CONFIG_FILES.has(file.name)) {
+                 configContents.push(`\n--- ${file.name} ---\n${content}\n`);
+                 configFileContents[file.name] = content;
+               }
                sourceFiles.push(ingestFile(filePath, content, file.size));
             }
           }
@@ -149,6 +170,7 @@ export const useRepoProcessor = () => {
           // Github logic omitted for brevity (same structure as original, calling ingestFile)
           const repoInfo = parseGithubUrl(githubUrl);
           if (!repoInfo) throw new Error("Invalid GitHub URL");
+          repoName = repoInfo.repo;
           const { tree, branch } = await fetchGithubRepoTree(repoInfo.owner, repoInfo.repo);
           const relevantNodes = tree.filter(node => {
               const hasIgnoredDir = node.path.split('/').some(part => IGNORED_DIRS.has(part));
@@ -160,11 +182,24 @@ export const useRepoProcessor = () => {
              if (fetchedCount > 30) break;
              const content = await fetchGithubFileContent(repoInfo.owner, repoInfo.repo, branch, node.path);
              fileTree += `- ${node.path}\n`;
-             if (CONFIG_FILES.has(node.path.split('/').pop()||'')) configContents.push(`\n--- ${node.path} ---\n${content}\n`);
+             if (CONFIG_FILES.has(node.path.split('/').pop()||'')) {
+               const configFileName = node.path.split('/').pop() || '';
+               configContents.push(`\n--- ${node.path} ---\n${content}\n`);
+               if (configFileName) configFileContents[configFileName] = content;
+             }
              sourceFiles.push(ingestFile(node.path, content, node.size || 0));
              fetchedCount++;
              setProgress(Math.round((fetchedCount / 30) * 10));
           }
+      }
+
+      if (!repoName && inputType === 'local') {
+        repoName = 'پروژه محلی';
+      }
+
+      if (sourceFiles.length > 0) {
+        detectedSummary = detectRepoSummary(sourceFiles, configFileContents, repoName);
+        setRepoSummary(detectedSummary);
       }
 
       // --- Pass 2: Cross-Reference Linking ---
@@ -179,6 +214,8 @@ export const useRepoProcessor = () => {
       // --- Stats Generation ---
       const totalLines = Object.values(languageStats).reduce((a, b) => a + b, 0);
       let statsMarkdown = '';
+      let repoInsightsMarkdown = '';
+      let readerSummary = '';
       const processedStats: { lang: string; lines: number; percent: number; color: string }[] = [];
       const colors = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899', '#8B5CF6', '#14B8A6'];
       if (totalLines > 0) {
@@ -189,19 +226,28 @@ export const useRepoProcessor = () => {
         });
         setStats(processedStats);
         statsMarkdown = `\n| زبان / تکنولوژی | تعداد خط کد (LOC) | درصد پروژه |\n| :--- | :--- | :--- |\n${processedStats.map(s => `| **${s.lang}** | ${s.lines.toLocaleString()} خط | ${s.percent}% |`).join('\n')}\n`;
+        ({ readerSummary, insightsMarkdown: repoInsightsMarkdown } = buildRepoInsights(detectedSummary, processedStats[0]?.lang));
+      }
+      if (!repoInsightsMarkdown) {
+        ({ readerSummary, insightsMarkdown: repoInsightsMarkdown } = buildRepoInsights(detectedSummary));
       }
 
       // --- Documentation Generation Pipeline ---
-      let parts: any = { root: '', arch: '', ops: '', seq: '', api: '', erd: '', class: '', infra: '', code: '' };
+      let parts: any = { root: '', arch: '', ops: '', seq: '', api: '', erd: '', class: '', infra: '', useCase: '', code: '' };
       const assembleDoc = () => {
           let doc = `# مستندات جامع پروژه (CodeWiki)\n\nتولید شده توسط دستیار هوشمند رایان هم‌افزا\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+          if (readerSummary) {
+            doc += `## ✨ خلاصه خواننده‌محور\n\n${readerSummary}\n\n---\n\n`;
+          }
           if (statsMarkdown) doc += `## 📊 DNA پروژه\n\n${statsMarkdown}\n\n---\n\n`;
+          if (repoInsightsMarkdown) doc += `${repoInsightsMarkdown}\n\n---\n\n`;
           if (parts.root) doc += `${parts.root}\n\n---\n\n`;
           if (parts.arch) doc += `## 🏗 معماری سیستم\n\n${parts.arch}\n\n---\n\n`;
           if (parts.erd) doc += `## 🗄 مدل داده‌ها (ERD)\n\n${parts.erd}\n\n---\n\n`;
           if (parts.class) doc += `## 🧩 نمودار کلاس (Class Diagram)\n\n${parts.class}\n\n---\n\n`;
           if (parts.infra) doc += `## ☁️ زیرساخت و معماری کلان (Infrastructure Diagram)\n\n${parts.infra}\n\n---\n\n`;
           if (parts.seq) doc += `## 🔄 نمودار توالی سناریوی اصلی (Sequence Diagram)\n\n${parts.seq}\n\n---\n\n`;
+          if (parts.useCase) doc += `## 🎯 نمودار Use Case (Frontend)\n\n${parts.useCase}\n\n---\n\n`;
           if (parts.code) doc += `## 💻 مستندات کدها\n\n${parts.code}`;
           return doc;
       };
@@ -276,6 +322,11 @@ export const useRepoProcessor = () => {
          parts.infra = extractMermaidCode(await generateCompletion(config, infraContext + strictModeSuffix, PROMPT_LEVEL_9_INFRA));
          setGeneratedDoc(assembleDoc());
       }
+      if (detectedSummary?.type === 'frontend') {
+         const useCaseContext = `Project Structure:\n${fileTree}\n\nSummaries:\n${fileSummaries.join('\n')}`;
+         parts.useCase = extractMermaidCode(await generateCompletion(config, useCaseContext + strictModeSuffix, PROMPT_LEVEL_10_USE_CASE));
+         setGeneratedDoc(assembleDoc());
+      }
 
       addLog('تمامی مراحل با موفقیت به پایان رسید.', 'success');
       setProgress(100);
@@ -288,5 +339,5 @@ export const useRepoProcessor = () => {
     }
   };
 
-  return { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, knowledgeGraph };
+  return { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, repoSummary, knowledgeGraph };
 };

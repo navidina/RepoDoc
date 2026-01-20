@@ -36,7 +36,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   const vectorStoreRef = useRef<LocalVectorStore | null>(null);
 
   // --- Hooks ---
-  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats } = useRepoProcessor();
+  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, repoSummary } = useRepoProcessor();
   const { chatMessages, chatInput, setChatInput, isChatLoading, isRetrieving, handleSendMessage } = useChat(config, vectorStoreRef, hasContext);
 
   useEffect(() => {
@@ -188,6 +188,53 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                     </div>
                 ))}
             </div>
+        </div>
+      </div>
+    );
+  };
+
+  const repoTypeLabel = (type: string) => {
+    switch (type) {
+      case 'frontend':
+        return 'فرانت‌اند';
+      case 'backend':
+        return 'بک‌اند';
+      case 'fullstack':
+        return 'فول‌استک';
+      default:
+        return 'نامشخص';
+    }
+  };
+
+  const repoTypeBadgeClass = (type: string) => {
+    switch (type) {
+      case 'frontend':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'backend':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'fullstack':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+      default:
+        return 'bg-slate-100 text-slate-600 border-slate-200';
+    }
+  };
+
+  const RepoSummaryCard = () => {
+    if (!repoSummary) return null;
+
+    return (
+      <div className="not-prose bg-white p-6 rounded-[2rem] border border-slate-100 shadow-soft mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-brand-50 p-3 rounded-2xl text-brand-600 border border-brand-100">
+            <Server className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-slate-800">مخزن شناسایی‌شده</h3>
+            <p className="text-sm text-slate-500 font-medium dir-ltr">{repoSummary.name}</p>
+          </div>
+        </div>
+        <div className={`px-4 py-2 rounded-xl border text-sm font-bold ${repoTypeBadgeClass(repoSummary.type)}`}>
+          {repoTypeLabel(repoSummary.type)}
         </div>
       </div>
     );
@@ -518,6 +565,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
               ) : (
                 <div className="prose prose-slate max-w-none dir-rtl prose-headings:font-bold prose-headings:text-slate-800 prose-p:text-slate-600 prose-pre:rounded-2xl prose-pre:shadow-lg prose-img:rounded-2xl">
                   {/* Creative Stats Widget Rendered Here */}
+                  <RepoSummaryCard />
                   <StatsWidget />
                   <MarkdownRenderer content={generatedDoc} />
                 </div>
