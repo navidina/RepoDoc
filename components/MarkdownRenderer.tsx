@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import MermaidRenderer from './MermaidRenderer';
 import { useRepoProcessor } from '../hooks/useRepoProcessor'; 
 import { CodeSymbol } from '../types';
@@ -87,6 +88,49 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
 
 const MarkdownRenderer = ({ content }: { content: string }) => {
   const { knowledgeGraph } = useRepoProcessor();
+  const sanitizeSchema = {
+    ...defaultSchema,
+    tagNames: [
+      ...(defaultSchema.tagNames || []),
+      'details',
+      'summary',
+      'div',
+      'span',
+      'pre',
+      'code',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+      'hr'
+    ],
+    attributes: {
+      ...defaultSchema.attributes,
+      '*': [...(defaultSchema.attributes?.['*'] || []), 'className', 'id'],
+      a: ['href', 'title', 'target', 'rel', 'className'],
+      code: ['className'],
+      div: ['className', 'id'],
+      span: ['className'],
+      th: ['colspan', 'rowspan'],
+      td: ['colspan', 'rowspan'],
+      details: ['open']
+    }
+  };
+  const blockElements = new Set([
+    'div',
+    'pre',
+    'table',
+    'details',
+    'ul',
+    'ol',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'hr'
+  ]);
 
   // Custom Text Renderer to detect symbols and auto-link them
   const TextRenderer = ({ children }: any) => {
@@ -119,19 +163,33 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
       components={{
         h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-slate-900 my-6 border-b-2 border-slate-100 pb-3" {...props} />,
         h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-slate-800 mt-8 mb-4 flex items-center gap-2" {...props} />,
         h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold text-slate-700 mt-6 mb-2" {...props} />,
-        p: ({node, children, ...props}: any) => (
-           <p className="text-slate-600 leading-8 mb-4 text-justify" {...props}>
-             {React.Children.map(children, child => {
-                if (typeof child === 'string') return <TextRenderer>{child}</TextRenderer>;
-                return child;
-             })}
-           </p>
-        ),
+        p: ({node, children, ...props}: any) => {
+           const childrenArray = React.Children.toArray(children);
+           const containsBlock = childrenArray.some(child => {
+             return React.isValidElement(child) && typeof child.type === 'string' && blockElements.has(child.type);
+           });
+           const mappedChildren = React.Children.map(children, child => {
+             if (typeof child === 'string') return <TextRenderer>{child}</TextRenderer>;
+             return child;
+           });
+           if (containsBlock) {
+             return (
+               <div className="mb-4" {...props}>
+                 {mappedChildren}
+               </div>
+             );
+           }
+           return (
+             <p className="text-slate-600 leading-8 mb-4 text-justify" {...props}>
+               {mappedChildren}
+             </p>
+           );
+        },
         li: ({node, children, ...props}: any) => (
            <li {...props}>
               {React.Children.map(children, child => {
