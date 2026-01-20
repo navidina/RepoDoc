@@ -92,3 +92,15 @@ export const normalizeUseCaseDiagram = (diagram: string): string => {
 
   return `\`\`\`mermaid\n${normalized.join('\n')}\n\`\`\``;
 };
+
+const sanitizeNodeId = (value: string) => value.replace(/[^a-zA-Z0-9_]/g, '_');
+
+export const buildDependencyMermaid = (edges: [string, string][]): string => {
+  if (edges.length === 0) return '';
+  const lines = edges.map(([from, to]) => {
+    const fromId = sanitizeNodeId(from);
+    const toId = sanitizeNodeId(to);
+    return `${fromId}["${from}"] --> ${toId}["${to}"]`;
+  });
+  return `\`\`\`mermaid\nflowchart LR\n${lines.join('\n')}\n\`\`\``;
+};

@@ -1,12 +1,14 @@
 
 import { useState, useEffect } from 'react';
-import { OllamaConfig, ProcessingLog, ProcessedFile, CodeSymbol, RepoSummary } from '../types';
+import { OllamaConfig, ProcessingLog, ProcessedFile, CodeSymbol, RepoSummary, RepoIntelSnapshot } from '../types';
 import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA, PROMPT_LEVEL_10_USE_CASE } from '../utils/constants';
 import { checkOllamaConnection, generateCompletion } from '../services/ollamaService';
 import { extractFileMetadata, resolveReferences } from '../services/codeParser';
 import { LocalVectorStore } from '../services/vectorStore';
-import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent } from '../services/githubService';
-import { generateFileHeaderHTML, extractMermaidCode, normalizeUseCaseDiagram } from '../utils/markdownHelpers';
+import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent, fetchGithubCommits, fetchGithubCommitFiles } from '../services/githubService';
+import { generateFileHeaderHTML, extractMermaidCode, normalizeUseCaseDiagram, buildDependencyMermaid } from '../utils/markdownHelpers';
+import { buildRunbookMarkdown } from '../utils/runbook';
+import { analyzeDocQuality } from '../utils/docQuality';
 import { detectRepoSummary } from '../utils/repoDetection';
 import { buildRepoInsights } from '../utils/repoDocumentation';
 
@@ -54,6 +56,14 @@ export const useRepoProcessor = () => {
       return saved ? JSON.parse(saved).repoSummary || null : null;
     } catch (e) { return null; }
   });
+
+  const [repoIntel, setRepoIntel] = useState<RepoIntelSnapshot | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved).repoIntel || null : null;
+    } catch (e) { return null; }
+  });
   
   // Updated: Store Full Symbol Table
   const [knowledgeGraph, setKnowledgeGraph] = useState<Record<string, CodeSymbol>>(() => {
@@ -77,6 +87,7 @@ export const useRepoProcessor = () => {
         generatedDoc,
         stats,
         repoSummary,
+        repoIntel,
         knowledgeGraph,
         lastUpdated: new Date().toISOString()
       };
@@ -84,7 +95,7 @@ export const useRepoProcessor = () => {
     } catch (e) {
       console.warn('Failed to save session to localStorage:', e);
     }
-  }, [logs, generatedDoc, stats, repoSummary, knowledgeGraph, isProcessing]);
+  }, [logs, generatedDoc, stats, repoSummary, repoIntel, knowledgeGraph, isProcessing]);
 
 
   const addLog = (message: string, type: ProcessingLog['type'] = 'info') => {
@@ -98,6 +109,7 @@ export const useRepoProcessor = () => {
     setLogs([]);
     setStats([]);
     setRepoSummary(null);
+    setRepoIntel(null);
     setKnowledgeGraph({});
     setHasContext(false);
     
@@ -117,6 +129,7 @@ export const useRepoProcessor = () => {
       const languageStats: Record<string, number> = {};
       let repoName = '';
       let detectedSummary: RepoSummary | null = null;
+      let repoIntelSnapshot: RepoIntelSnapshot | null = null;
 
       addLog('فاز ۱: اسکن لغوی و توکن‌بندی فایل‌ها (Lexical Analysis)...', 'info');
 
@@ -191,6 +204,36 @@ export const useRepoProcessor = () => {
              fetchedCount++;
              setProgress(Math.round((fetchedCount / 30) * 10));
           }
+
+          try {
+            const commits = await fetchGithubCommits(repoInfo.owner, repoInfo.repo, 15);
+            const hotspots: Record<string, number> = {};
+            const committerCounts: Record<string, number> = {};
+            for (const commit of commits.slice(0, 6)) {
+              committerCounts[commit.author] = (committerCounts[commit.author] || 0) + 1;
+              const files = await fetchGithubCommitFiles(repoInfo.owner, repoInfo.repo, commit.sha);
+              files.forEach(file => {
+                hotspots[file.filename] = (hotspots[file.filename] || 0) + 1;
+              });
+            }
+            const topCommitters = Object.entries(committerCounts)
+              .map(([name, commitsCount]) => ({ name, commits: commitsCount }))
+              .sort((a, b) => b.commits - a.commits)
+              .slice(0, 5);
+            const hotspotList = Object.entries(hotspots)
+              .map(([path, changes]) => ({ path, changes }))
+              .sort((a, b) => b.changes - a.changes)
+              .slice(0, 8);
+            repoIntelSnapshot = {
+              commitCount: commits.length,
+              latestCommitDate: commits[0]?.date,
+              topCommitters,
+              hotspots: hotspotList
+            };
+            setRepoIntel(repoIntelSnapshot);
+          } catch (error) {
+            console.warn('Repo intelligence fetch failed:', error);
+          }
       }
 
       if (!repoName && inputType === 'local') {
@@ -214,6 +257,7 @@ export const useRepoProcessor = () => {
       // --- Stats Generation ---
       const totalLines = Object.values(languageStats).reduce((a, b) => a + b, 0);
       let statsMarkdown = '';
+      let repoIntelMarkdown = '';
       let repoInsightsMarkdown = '';
       let readerSummary = '';
       const processedStats: { lang: string; lines: number; percent: number; color: string }[] = [];
@@ -239,15 +283,54 @@ export const useRepoProcessor = () => {
         }));
       }
 
+      if (repoIntelSnapshot) {
+        const hotspotLines = repoIntelSnapshot.hotspots.length
+          ? repoIntelSnapshot.hotspots.map(hotspot => `- ${hotspot.path} (${hotspot.changes} تغییر)`).join('\n')
+          : '- داده‌ای یافت نشد';
+        const committerLines = repoIntelSnapshot.topCommitters.length
+          ? repoIntelSnapshot.topCommitters.map(committer => `- ${committer.name} (${committer.commits} commit)`).join('\n')
+          : '- داده‌ای یافت نشد';
+        repoIntelMarkdown = [
+          '## 🧠 هوشمندی مخزن (Repository Intelligence)',
+          `- تعداد commitهای بررسی‌شده: ${repoIntelSnapshot.commitCount}`,
+          repoIntelSnapshot.latestCommitDate ? `- آخرین commit: ${new Date(repoIntelSnapshot.latestCommitDate).toLocaleString('fa-IR')}` : '- آخرین commit: نامشخص',
+          '',
+          '### 🔥 نقاط پرچرخش (Hotspots)',
+          hotspotLines,
+          '',
+          '### 👥 مالکیت فایل‌ها (Ownership)',
+          committerLines
+        ].join('\n');
+      } else {
+        repoIntelMarkdown = [
+          '## 🧠 هوشمندی مخزن (Repository Intelligence)',
+          '- تاریخچه تغییرات برای این ورودی در دسترس نیست.',
+          '- برای دریافت داده‌های commit/history از مخزن GitHub استفاده کنید.'
+        ].join('\n');
+      }
+
       // --- Documentation Generation Pipeline ---
       let parts: any = { root: '', arch: '', ops: '', seq: '', api: '', erd: '', class: '', infra: '', useCase: '', code: '' };
+      const runbookMarkdown = buildRunbookMarkdown(sourceFiles.map(file => file.path), configFileContents);
+      let qualityMarkdown = '';
+      const dependencyEdges: [string, string][] = [];
+      sourceFiles.forEach(file => {
+        file.metadata.dependencies.forEach(dep => {
+          dependencyEdges.push([file.path, dep]);
+        });
+      });
+      const dependencyMermaid = buildDependencyMermaid(dependencyEdges.slice(0, 60));
       const assembleDoc = () => {
           let doc = `# مستندات جامع پروژه (CodeWiki)\n\nتولید شده توسط دستیار هوشمند رایان هم‌افزا\nمدل: ${config.model}\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
           if (readerSummary) {
             doc += `## ✨ خلاصه خواننده‌محور\n\n${readerSummary}\n\n---\n\n`;
           }
           if (statsMarkdown) doc += `## 📊 DNA پروژه\n\n${statsMarkdown}\n\n---\n\n`;
+          if (repoIntelMarkdown) doc += `${repoIntelMarkdown}\n\n---\n\n`;
           if (repoInsightsMarkdown) doc += `${repoInsightsMarkdown}\n\n---\n\n`;
+          if (dependencyMermaid) doc += `## 🧩 گراف وابستگی‌ها (Dependency Graph)\n\n${dependencyMermaid}\n\n---\n\n`;
+          if (runbookMarkdown) doc += `${runbookMarkdown}\n\n---\n\n`;
+          if (qualityMarkdown) doc += `${qualityMarkdown}\n\n---\n\n`;
           if (parts.root) doc += `${parts.root}\n\n---\n\n`;
           if (parts.arch) doc += `## 🏗 معماری سیستم\n\n${parts.arch}\n\n---\n\n`;
           if (parts.erd) doc += `## 🗄 مدل داده‌ها (ERD)\n\n${parts.erd}\n\n---\n\n`;
@@ -335,6 +418,21 @@ export const useRepoProcessor = () => {
          parts.useCase = normalizeUseCaseDiagram(extractMermaidCode(rawUseCase));
          setGeneratedDoc(assembleDoc());
       }
+
+      const finalDoc = assembleDoc();
+      const quality = analyzeDocQuality(finalDoc);
+      const qualityLines = quality.warnings.length
+        ? quality.warnings.map(warning => `- ${warning}`).join('\n')
+        : '- موردی یافت نشد.';
+      qualityMarkdown = [
+        '## ✅ کنترل کیفیت مستندات',
+        `- تعداد سرفصل‌ها: ${quality.headingCount}`,
+        `- تعداد موارد TODO/FIXME: ${quality.todoCount}`,
+        '',
+        '### هشدارها',
+        qualityLines
+      ].join('\n');
+      setGeneratedDoc(assembleDoc());
 
       addLog('تمامی مراحل با موفقیت به پایان رسید.', 'success');
       setProgress(100);

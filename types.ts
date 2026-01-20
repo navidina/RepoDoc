@@ -105,3 +105,10 @@ export interface RepoSummary {
   frontendScore: number;
   backendScore: number;
 }
+
+export interface RepoIntelSnapshot {
+  commitCount: number;
+  latestCommitDate?: string;
+  topCommitters: { name: string; commits: number }[];
+  hotspots: { path: string; changes: number }[];
+}
