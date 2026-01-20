@@ -9,6 +9,7 @@ import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent, fetchGithu
 import { generateFileHeaderHTML, extractMermaidCode, normalizeUseCaseDiagram, buildDependencyMermaid } from '../utils/markdownHelpers';
 import { buildRunbookMarkdown } from '../utils/runbook';
 import { analyzeDocQuality } from '../utils/docQuality';
+import { buildApiCallInsights } from '../utils/apiCallInsights';
 import { detectRepoSummary } from '../utils/repoDetection';
 import { buildRepoInsights } from '../utils/repoDocumentation';
 
@@ -312,6 +313,7 @@ export const useRepoProcessor = () => {
       // --- Documentation Generation Pipeline ---
       let parts: any = { root: '', arch: '', ops: '', seq: '', api: '', erd: '', class: '', infra: '', useCase: '', code: '' };
       const runbookMarkdown = buildRunbookMarkdown(sourceFiles.map(file => file.path), configFileContents);
+      const apiCallMarkdown = buildApiCallInsights(sourceFiles);
       let qualityMarkdown = '';
       const dependencyEdges: [string, string][] = [];
       sourceFiles.forEach(file => {
@@ -330,6 +332,7 @@ export const useRepoProcessor = () => {
           if (repoInsightsMarkdown) doc += `${repoInsightsMarkdown}\n\n---\n\n`;
           if (dependencyMermaid) doc += `## 🧩 گراف وابستگی‌ها (Dependency Graph)\n\n${dependencyMermaid}\n\n---\n\n`;
           if (runbookMarkdown) doc += `${runbookMarkdown}\n\n---\n\n`;
+          if (apiCallMarkdown) doc += `${apiCallMarkdown}\n\n---\n\n`;
           if (qualityMarkdown) doc += `${qualityMarkdown}\n\n---\n\n`;
           if (parts.root) doc += `${parts.root}\n\n---\n\n`;
           if (parts.arch) doc += `## 🏗 معماری سیستم\n\n${parts.arch}\n\n---\n\n`;
