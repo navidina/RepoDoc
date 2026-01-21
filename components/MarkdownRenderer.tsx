@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import MermaidRenderer from './MermaidRenderer';
 import { useRepoProcessor } from '../hooks/useRepoProcessor'; 
 import { CodeSymbol } from '../types';
@@ -88,36 +87,6 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
 
 const MarkdownRenderer = ({ content }: { content: string }) => {
   const { knowledgeGraph } = useRepoProcessor();
-  const sanitizeSchema = {
-    ...defaultSchema,
-    tagNames: [
-      ...(defaultSchema.tagNames || []),
-      'details',
-      'summary',
-      'div',
-      'span',
-      'pre',
-      'code',
-      'table',
-      'thead',
-      'tbody',
-      'tr',
-      'th',
-      'td',
-      'hr'
-    ],
-    attributes: {
-      ...defaultSchema.attributes,
-      '*': [...(defaultSchema.attributes?.['*'] || []), 'className', 'id'],
-      a: ['href', 'title', 'target', 'rel', 'className'],
-      code: ['className'],
-      div: ['className', 'id'],
-      span: ['className'],
-      th: ['colspan', 'rowspan'],
-      td: ['colspan', 'rowspan'],
-      details: ['open']
-    }
-  };
   const blockElements = new Set([
     'div',
     'pre',
@@ -163,7 +132,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+      rehypePlugins={[rehypeRaw]}
       components={{
         h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold text-slate-900 my-6 border-b-2 border-slate-100 pb-3" {...props} />,
         h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-slate-800 mt-8 mb-4 flex items-center gap-2" {...props} />,
