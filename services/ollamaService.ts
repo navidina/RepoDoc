@@ -57,7 +57,7 @@ export const generateCompletion = async (
           num_ctx: 16384    // Increased to 16k for deep analysis of large files
         }
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       throw new Error(`Ollama API Error: ${response.statusText}`);
@@ -66,6 +66,10 @@ export const generateCompletion = async (
     const data = await response.json();
     return data.message.content;
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.warn('Ollama Generation timed out.');
+      throw new Error('درخواست به Ollama زمان‌بر شد. لطفاً دوباره تلاش کنید.');
+    }
     console.error("Ollama Generation Error:", error);
     throw error;
   }
@@ -90,7 +94,7 @@ export const sendChatRequest = async (
           num_ctx: 16384 // Increased context for chat as well
         }
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       throw new Error(`Chat API Error: ${response.statusText}`);
@@ -99,6 +103,10 @@ export const sendChatRequest = async (
     const data = await response.json();
     return data.message.content;
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.warn('Ollama Chat timed out.');
+      throw new Error('درخواست چت به Ollama زمان‌بر شد. لطفاً دوباره تلاش کنید.');
+    }
     console.error("Ollama Chat Error:", error);
     throw error;
   }
