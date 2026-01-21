@@ -11,10 +11,11 @@ export class LocalVectorStore {
   private documents: VectorDocument[] = [];
   private config: OllamaConfig;
   private invertedIndex: Map<string, Set<string>> = new Map(); // token -> Set<docId>
-  private embeddingsEnabled = true;
+  private embeddingsEnabled: boolean;
 
-  constructor(config: OllamaConfig) {
+  constructor(config: OllamaConfig, embeddingsEnabled = true) {
     this.config = config;
+    this.embeddingsEnabled = embeddingsEnabled;
   }
 
   // Simple tokenizer for code

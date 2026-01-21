@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { OllamaConfig, ProcessingLog, ProcessedFile, CodeSymbol, RepoSummary, RepoIntelSnapshot } from '../types';
 import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_LEVEL_3_ARCH, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_9_INFRA, PROMPT_LEVEL_10_USE_CASE } from '../utils/constants';
-import { checkOllamaConnection, generateCompletion } from '../services/ollamaService';
+import { checkOllamaConnection, checkEmbeddingModelAvailable, generateCompletion } from '../services/ollamaService';
 import { extractFileMetadata, resolveReferences } from '../services/codeParser';
 import { LocalVectorStore } from '../services/vectorStore';
 import { parseGithubUrl, fetchGithubRepoTree, fetchGithubFileContent, fetchGithubCommits, fetchGithubCommitFiles } from '../services/githubService';
@@ -122,6 +122,12 @@ export const useRepoProcessor = () => {
       const isConnected = await checkOllamaConnection(config);
       if (!isConnected) throw new Error(`اتصال به Ollama در آدرس ${config.baseUrl} برقرار نشد.`);
       addLog('اتصال به Ollama برقرار شد.', 'success');
+
+      const embeddingsAvailable = await checkEmbeddingModelAvailable(config);
+      if (!embeddingsAvailable) {
+        addLog('مدل embedding در Ollama یافت نشد؛ RAG فقط با جستجوی کلیدواژه ادامه می‌یابد.', 'warning');
+      }
+      vectorStoreRef.current = new LocalVectorStore(config, embeddingsAvailable);
 
       let fileTree = '';
       const configContents: string[] = [];

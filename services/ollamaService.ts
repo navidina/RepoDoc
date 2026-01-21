@@ -21,6 +21,19 @@ export const checkOllamaConnection = async (config: OllamaConfig): Promise<boole
   }
 };
 
+export const checkEmbeddingModelAvailable = async (config: OllamaConfig): Promise<boolean> => {
+  if (!config.embeddingModel) return false;
+  try {
+    const response = await fetchWithTimeout(`${config.baseUrl}/api/tags`);
+    if (!response.ok) return false;
+    const data = await response.json();
+    const models = (data.models || []).map((model: { name?: string }) => model.name).filter(Boolean);
+    return models.includes(config.embeddingModel);
+  } catch (error) {
+    return false;
+  }
+};
+
 export const generateCompletion = async (
   config: OllamaConfig,
   prompt: string,
@@ -96,6 +109,9 @@ export const generateEmbeddings = async (
   config: OllamaConfig,
   prompt: string
 ): Promise<number[]> => {
+  if (!config.embeddingModel) {
+    return [];
+  }
   try {
     const response = await fetchWithTimeout(`${config.baseUrl}/api/embeddings`, {
       method: 'POST',
