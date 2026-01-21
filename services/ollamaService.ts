@@ -114,12 +114,20 @@ export const generateEmbeddings = async (
            console.warn("Embedding model failed, retrying with main model...");
            return generateEmbeddings({...config, embeddingModel: config.model}, prompt);
        }
+       if (response.status === 400) {
+         console.warn('Embedding API returned 400. Disabling embeddings for this session.');
+         return [];
+       }
        throw new Error(`Embedding API Error: ${response.statusText}`);
     }
 
     const data = await response.json();
     return data.embedding;
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.warn('Embedding request timed out. Falling back to keyword search.');
+      return [];
+    }
     console.error("Ollama Embedding Error:", error);
     throw error;
   }
