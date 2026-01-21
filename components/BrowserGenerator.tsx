@@ -36,7 +36,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   const vectorStoreRef = useRef<LocalVectorStore | null>(null);
 
   // --- Hooks ---
-  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, repoSummary } = useRepoProcessor();
+  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, repoSummary, repoIntel } = useRepoProcessor();
   const { chatMessages, chatInput, setChatInput, isChatLoading, isRetrieving, handleSendMessage } = useChat(config, vectorStoreRef, hasContext);
 
   useEffect(() => {
@@ -107,6 +107,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     const payload = {
       generatedDoc,
       repoSummary,
+      repoIntel,
       stats,
       generatedAt: new Date().toISOString()
     };
@@ -119,8 +120,102 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     URL.revokeObjectURL(url);
   };
 
+  const buildHtmlExport = () => {
+    const escapeHtml = (value: string) =>
+      value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const lines = generatedDoc.split('\n');
+    const tocItems: { level: number; text: string; id: string }[] = [];
+    const htmlLines: string[] = [];
+    let inCode = false;
+    let codeBuffer: string[] = [];
+
+    const flushCode = () => {
+      if (!codeBuffer.length) return;
+      htmlLines.push(`<pre>${escapeHtml(codeBuffer.join('\n'))}</pre>`);
+      codeBuffer = [];
+    };
+
+    lines.forEach((line) => {
+      if (line.startsWith('```')) {
+        if (inCode) {
+          flushCode();
+          inCode = false;
+        } else {
+          inCode = true;
+        }
+        return;
+      }
+      if (inCode) {
+        codeBuffer.push(line);
+        return;
+      }
+      const headingMatch = /^(#{1,6})\s+(.*)/.exec(line);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = headingMatch[2];
+        const id = text.replace(/[^\w\u0600-\u06FF]+/g, '-').toLowerCase();
+        tocItems.push({ level, text, id });
+        htmlLines.push(`<h${level} id="${id}">${escapeHtml(text)}</h${level}>`);
+        return;
+      }
+      if (line.startsWith('- ')) {
+        htmlLines.push(`<li>${escapeHtml(line.slice(2))}</li>`);
+        return;
+      }
+      htmlLines.push(`<p>${escapeHtml(line)}</p>`);
+    });
+    flushCode();
+
+    const renderedHtml = htmlLines.join('\n')
+      .replace(/(<li>.*<\/li>)(\n)(?!<li>)/g, '$1</ul>')
+      .replace(/(<li>)/g, '<ul>$1');
+
+    const tocHtml = tocItems
+      .map((item) => `<li class="toc-item level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`)
+      .join('\n');
+
+    return `<!doctype html>
+<html lang="fa">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Repository Documentation</title>
+    <style>
+      body { font-family: sans-serif; margin: 0; background: #f8fafc; color: #0f172a; }
+      header { background: #0f172a; color: #fff; padding: 24px; }
+      main { display: grid; grid-template-columns: 280px 1fr; gap: 24px; padding: 24px; }
+      nav { background: #fff; border-radius: 16px; padding: 16px; height: fit-content; position: sticky; top: 24px; }
+      nav h2 { font-size: 16px; margin: 0 0 8px; }
+      .toc-item { list-style: none; margin: 4px 0; }
+      .toc-item a { text-decoration: none; color: #1d4ed8; }
+      .level-2 { margin-right: 12px; }
+      .level-3 { margin-right: 24px; }
+      section { background: #fff; border-radius: 16px; padding: 24px; }
+      pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 12px; overflow-x: auto; }
+      h1, h2, h3 { margin-top: 24px; }
+      ul { padding-right: 20px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>مستندات جامع مخزن</h1>
+      <p>گزارش تولید شده در ${new Date().toLocaleString('fa-IR')}</p>
+    </header>
+    <main>
+      <nav>
+        <h2>فهرست مطالب</h2>
+        <ul>${tocHtml}</ul>
+      </nav>
+      <section>
+        ${renderedHtml}
+      </section>
+    </main>
+  </body>
+</html>`;
+  };
+
   const downloadHtml = () => {
-    const html = `<!doctype html><html lang="fa"><head><meta charset="utf-8"/><title>Documentation</title></head><body><pre>${generatedDoc.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
+    const html = buildHtmlExport();
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -131,7 +226,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   };
 
   const downloadPdf = () => {
-    const html = `<!doctype html><html lang="fa"><head><meta charset="utf-8"/><title>Documentation</title></head><body><pre>${generatedDoc.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
+    const html = buildHtmlExport();
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(html);

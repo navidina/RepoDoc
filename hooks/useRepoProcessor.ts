@@ -454,5 +454,5 @@ export const useRepoProcessor = () => {
     }
   };
 
-  return { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, repoSummary, knowledgeGraph };
+  return { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, repoSummary, repoIntel, knowledgeGraph };
 };
