@@ -34,41 +34,55 @@ export const checkEmbeddingModelAvailable = async (config: OllamaConfig): Promis
   }
 };
 
+const requestCompletion = async (
+  config: OllamaConfig,
+  prompt: string,
+  system: string,
+  timeoutMs: number
+): Promise<string> => {
+  const response = await fetchWithTimeout(`${config.baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: prompt }
+      ],
+      stream: false,
+      options: {
+        temperature: 0.1, // Strict adherence to instructions
+        num_ctx: 16384    // Increased to 16k for deep analysis of large files
+      }
+    }),
+  }, timeoutMs);
+
+  if (!response.ok) {
+    throw new Error(`Ollama API Error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.message.content;
+};
+
 export const generateCompletion = async (
   config: OllamaConfig,
   prompt: string,
   system: string
 ): Promise<string> => {
   try {
-    const response = await fetchWithTimeout(`${config.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: prompt }
-        ],
-        stream: false,
-        options: {
-          temperature: 0.1, // Strict adherence to instructions
-          num_ctx: 16384    // Increased to 16k for deep analysis of large files
-        }
-      }),
-    }, 30000);
-
-    if (!response.ok) {
-      throw new Error(`Ollama API Error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.message.content;
+    return await requestCompletion(config, prompt, system, 30000);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      console.warn('Ollama Generation timed out.');
-      throw new Error('درخواست به Ollama زمان‌بر شد. لطفاً دوباره تلاش کنید.');
+      console.warn('Ollama Generation timed out. Retrying with longer timeout.');
+      try {
+        return await requestCompletion(config, prompt, system, 60000);
+      } catch (retryError) {
+        console.warn('Ollama Generation retry timed out.');
+        return '⚠️ پاسخ مدل به‌دلیل زمان‌بر بودن عملیات کامل نشد.';
+      }
     }
     console.error("Ollama Generation Error:", error);
     throw error;
