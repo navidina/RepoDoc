@@ -309,3 +309,27 @@ flowchart TB
     Auth --> PG
 \`\`\`
 `;
+
+// --- Level 10: Use Case Diagram (Frontend) ---
+export const PROMPT_LEVEL_10_USE_CASE = `STRICT MODE: ACTIVATED.
+ROLE: Senior UX Architect & System Analyst.
+
+TASK: Create a MermaidJS 'usecaseDiagram' focused on the FRONTEND user flows.
+
+CRITICAL RULES:
+1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
+2. NO summaries. NO explanations.
+3. Use Mermaid 'usecaseDiagram' syntax.
+4. Include primary actors (e.g., User, Admin, Guest) and key UI use cases.
+5. Use include/extend only when necessary.
+
+Example Output:
+\`\`\`mermaid
+usecaseDiagram
+  actor User
+  actor Admin
+  User --> (Browse UI)
+  User --> (Manage Profile)
+  Admin --> (Review Reports)
+\`\`\`
+`;

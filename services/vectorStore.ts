@@ -11,9 +11,11 @@ export class LocalVectorStore {
   private documents: VectorDocument[] = [];
   private config: OllamaConfig;
   private invertedIndex: Map<string, Set<string>> = new Map(); // token -> Set<docId>
+  private embeddingsEnabled: boolean;
 
-  constructor(config: OllamaConfig) {
+  constructor(config: OllamaConfig, embeddingsEnabled = true) {
     this.config = config;
+    this.embeddingsEnabled = embeddingsEnabled;
   }
 
   // Simple tokenizer for code
@@ -55,8 +57,15 @@ export class LocalVectorStore {
             this.invertedIndex.get(token)?.add(docId);
           });
 
-          // Generate Embedding
-          const embedding = await generateEmbeddings(this.config, chunk);
+          // Generate Embedding (optional)
+          let embedding: number[] | undefined;
+          if (this.embeddingsEnabled) {
+            embedding = await generateEmbeddings(this.config, chunk);
+            if (!embedding.length) {
+              this.embeddingsEnabled = false;
+              embedding = undefined;
+            }
+          }
           
           this.documents.push({
             id: docId,
@@ -95,13 +104,16 @@ export class LocalVectorStore {
   async similaritySearch(query: string, k: number = 4): Promise<VectorDocument[]> {
     if (this.documents.length === 0) return [];
 
-    const queryEmbedding = await generateEmbeddings(this.config, query);
+    const queryEmbedding = this.embeddingsEnabled ? await generateEmbeddings(this.config, query) : [];
+    if (this.embeddingsEnabled && !queryEmbedding.length) {
+      this.embeddingsEnabled = false;
+    }
     const queryTokens = this.tokenize(query);
     
     const results: SearchResult[] = this.documents.map(doc => {
       // 1. Vector Score
       let vectorScore = 0;
-      if (doc.embedding) {
+      if (this.embeddingsEnabled && doc.embedding) {
         vectorScore = this.cosineSimilarity(queryEmbedding, doc.embedding);
       }
 
@@ -114,7 +126,9 @@ export class LocalVectorStore {
 
       // 3. Hybrid Scoring Formula
       // CodeWiki prioritizes exact keyword matches (e.g. class names) slightly more than semantic vibe
-      const finalScore = (vectorScore * 0.6) + (keywordScore * 0.4);
+      const finalScore = this.embeddingsEnabled
+        ? (vectorScore * 0.6) + (keywordScore * 0.4)
+        : keywordScore;
 
       return {
         doc,

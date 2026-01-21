@@ -96,3 +96,19 @@ export interface ProcessedFile {
   lines: number;
   metadata: FileMetadata;
 }
+
+export type RepoType = 'frontend' | 'backend' | 'fullstack' | 'unknown';
+
+export interface RepoSummary {
+  name: string;
+  type: RepoType;
+  frontendScore: number;
+  backendScore: number;
+}
+
+export interface RepoIntelSnapshot {
+  commitCount: number;
+  latestCommitDate?: string;
+  topCommitters: { name: string; commits: number }[];
+  hotspots: { path: string; changes: number }[];
+}
