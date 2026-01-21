@@ -28,7 +28,7 @@ const extractHost = (url: string) => {
 };
 
 const buildMermaidFlow = (callSites: ApiCallSite[], endpoints: ApiEndpoint[]) => {
-  if (!callSites.length || !endpoints.length) return '';
+  if (!callSites.length) return '';
   const limitedCalls = callSites.slice(0, 6);
   const limitedEndpoints = endpoints.slice(0, 6);
   const nodes: string[] = [];
@@ -39,12 +39,20 @@ const buildMermaidFlow = (callSites: ApiCallSite[], endpoints: ApiEndpoint[]) =>
   limitedCalls.forEach((call, idx) => {
     const callId = `Call_${sanitize(`${call.filePath}_${call.line}_${idx}`)}`;
     nodes.push(`${callId}(["${call.method} ${call.url}"])`);
-    const target = limitedEndpoints[idx % limitedEndpoints.length];
-    const targetId = `Endpoint_${sanitize(`${target.path}_${idx}`)}`;
-    if (!nodes.some(node => node.includes(targetId))) {
-      nodes.push(`${targetId}["${target.method} ${target.path}"]`);
+    if (limitedEndpoints.length) {
+      const target = limitedEndpoints[idx % limitedEndpoints.length];
+      const targetId = `Endpoint_${sanitize(`${target.path}_${idx}`)}`;
+      if (!nodes.some(node => node.includes(targetId))) {
+        nodes.push(`${targetId}["${target.method} ${target.path}"]`);
+      }
+      edges.push(`${callId} --> ${targetId}`);
+    } else {
+      const externalId = 'External_APIs';
+      if (!nodes.some(node => node.includes(externalId))) {
+        nodes.push(`${externalId}[\"External APIs\"]`);
+      }
+      edges.push(`${callId} --> ${externalId}`);
     }
-    edges.push(`${callId} --> ${targetId}`);
   });
 
   return `\n\n\`\`\`mermaid\nflowchart LR\n${[...nodes, ...edges].join('\n')}\n\`\`\``;
@@ -105,6 +113,12 @@ export const buildApiCallInsights = (files: ProcessedFile[]) => {
   const hostLines = externalHosts.length ? externalHosts.map(host => `- ${host}`).join('\n') : '- موردی یافت نشد';
 
   const mermaidFlow = buildMermaidFlow(callSites, endpoints);
+  const pieLines = Object.entries(methodsCount)
+    .map(([method, count]) => `  \"${method}\" : ${count}`)
+    .join('\n');
+  const mermaidPie = pieLines
+    ? `\n\n\`\`\`mermaid\npie title توزیع متدهای API\n${pieLines}\n\`\`\``
+    : '';
 
   const markdown = [
     '## 📡 وضعیت فراخوانی‌های API',
@@ -115,6 +129,7 @@ export const buildApiCallInsights = (files: ProcessedFile[]) => {
     '| متد | تعداد |',
     '| --- | --- |',
     tableLines || '| - | 0 |',
+    mermaidPie,
     '',
     '### 🌐 میزبان‌های خارجی',
     hostLines,
