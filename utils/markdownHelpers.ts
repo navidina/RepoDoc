@@ -76,10 +76,9 @@ export const normalizeUseCaseDiagram = (diagram: string): string => {
   body = body.replace(/\r/g, '');
   body = body.replace(/^usecaseDiagram\s*/i, 'usecaseDiagram\n');
 
-  // If the model collapsed everything into one line, force breaks before key tokens
-  if (!body.includes('\n')) {
-    body = body.replace(/\b(actor|usecase|include|extend)\b/gi, '\n$1');
-  }
+  // Force breaks before key tokens so collapsed output becomes valid Mermaid
+  body = body.replace(/\s+(actor|usecase|include|extend)\b/gi, '\n$1');
+  body = body.replace(/\s+([A-Za-z0-9_]+)\s*-->/g, '\n$1 -->');
 
   const lines = body
     .split('\n')
@@ -91,6 +90,15 @@ export const normalizeUseCaseDiagram = (diagram: string): string => {
     if (!trimmed) return trimmed;
     if (trimmed.startsWith('(') && trimmed.endsWith(')')) return trimmed;
     return `(${trimmed})`;
+  };
+
+  const wrapUseCaseIfNeeded = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+    if ((trimmed.startsWith('(') && trimmed.endsWith(')')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+      return trimmed;
+    }
+    return /\s/.test(trimmed) ? wrapUseCase(trimmed) : trimmed;
   };
 
   const declaredActors = new Set<string>();
@@ -109,6 +117,13 @@ export const normalizeUseCaseDiagram = (diagram: string): string => {
       const actorName = actorMatch[1].trim();
       declaredActors.add(actorName);
       normalizedLines.push(`actor ${actorName}`);
+      return;
+    }
+
+    // Normalize bare usecase declarations (e.g., "usecase Browse UI")
+    const useCaseMatch = line.match(/^usecase\s+(.+)$/i);
+    if (useCaseMatch) {
+      normalizedLines.push(`usecase ${wrapUseCase(useCaseMatch[1])}`);
       return;
     }
 
@@ -133,8 +148,28 @@ export const normalizeUseCaseDiagram = (diagram: string): string => {
     }
 
     let updated = line;
-    updated = updated.replace(/^include\s+(.+?)\s+in\s+\((.+?)\)/i, '$1 ..> ($2) : <<include>>');
-    updated = updated.replace(/^extend\s+(.+?)\s+in\s+\((.+?)\)/i, '$1 ..> ($2) : <<extend>>');
+    updated = updated.replace(/^include\s+(.+?)\s+in\s+\((.+?)\)/i, (_, inc, base) => {
+      return `${wrapUseCase(inc)} ..> ${wrapUseCase(base)} : <<include>>`;
+    });
+    updated = updated.replace(/^include\s+(.+?)\s+in\s+(.+)$/i, (_, inc, base) => {
+      return `${wrapUseCase(inc)} ..> ${wrapUseCase(base)} : <<include>>`;
+    });
+    updated = updated.replace(/^extend\s+(.+?)\s+in\s+\((.+?)\)/i, (_, ext, base) => {
+      return `${wrapUseCase(ext)} ..> ${wrapUseCase(base)} : <<extend>>`;
+    });
+    updated = updated.replace(/^extend\s+(.+?)\s+in\s+(.+)$/i, (_, ext, base) => {
+      return `${wrapUseCase(ext)} ..> ${wrapUseCase(base)} : <<extend>>`;
+    });
+
+    const dottedArrowMatch = updated.match(/^(.+?)\s*\.\.>\s*(.+)$/);
+    if (dottedArrowMatch) {
+      updated = `${wrapUseCaseIfNeeded(dottedArrowMatch[1])} ..> ${wrapUseCaseIfNeeded(dottedArrowMatch[2])}`;
+    }
+
+    const arrowMatch = updated.match(/^(.+?)\s*-->\s*(.+)$/);
+    if (arrowMatch) {
+      updated = `${arrowMatch[1].trim()} --> ${wrapUseCaseIfNeeded(arrowMatch[2])}`;
+    }
 
     const arrowActorMatch = updated.match(/^([A-Za-z0-9_]+)\s*-->/);
     if (arrowActorMatch && !arrowActorMatch[1].startsWith('(')) {
