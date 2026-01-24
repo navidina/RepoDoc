@@ -85,7 +85,7 @@ const MermaidRenderer = ({ code }: { code: string }) => {
     if (fixed.startsWith('graph ')) {
        fixed = fixed.replace('graph ', 'flowchart ');
     }
-    const keywords = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram'];
+    const keywords = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram', 'usecaseDiagram'];
     const startIdx = keywords.findIndex(k => fixed.includes(k));
     if (startIdx !== -1 && !keywords.some(k => fixed.startsWith(k))) {
        const keyword = keywords[startIdx];
@@ -107,7 +107,7 @@ const MermaidRenderer = ({ code }: { code: string }) => {
 
         const cleanCode = fixMermaidSyntax(codeToRender);
 
-        const validStarts = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram', 'pie', 'gitGraph'];
+        const validStarts = ['sequenceDiagram', 'classDiagram', 'erDiagram', 'flowchart', 'gantt', 'stateDiagram', 'usecaseDiagram', 'pie', 'gitGraph'];
         if (!validStarts.some(start => cleanCode.startsWith(start))) {
            if (cleanCode.includes('-->') || cleanCode.includes('---')) {
                mermaid.initialize({ startOnLoad: false });
