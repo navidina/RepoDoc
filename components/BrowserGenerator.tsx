@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Users, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart, CheckCircle2, FileText, Cpu, Search, PenTool, ArrowRight, BookOpen, Workflow } from 'lucide-react';
-import { OllamaConfig, ProcessingLog } from '../types';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Users, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart, CheckCircle2, FileText, Cpu, Search, PenTool, ArrowRight, BookOpen, Workflow, Share2, Map } from 'lucide-react';
+import { OllamaConfig, ProcessingLog, CodeSymbol } from '../types';
 import { LocalVectorStore } from '../services/vectorStore';
 import { IGNORED_DIRS, ALLOWED_EXTENSIONS } from '../utils/constants';
 
@@ -11,6 +11,7 @@ import { useChat } from '../hooks/useChat';
 
 // Components
 import MarkdownRenderer from './MarkdownRenderer';
+import MermaidRenderer from './MermaidRenderer';
 
 interface BrowserGeneratorProps {
   config: OllamaConfig;
@@ -28,7 +29,9 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     code: true, 
     cookbook: true,
     dataFlow: true,
-    useCase: true, // New
+    useCase: true,
+    userJourney: true, // New
+    stateDiagram: true, // New
     arch: false, 
     ops: false, 
     sequence: true, 
@@ -39,7 +42,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   });
 
   // --- UI State ---
-  const [viewMode, setViewMode] = useState<'raw' | 'preview'>('preview'); 
+  const [viewMode, setViewMode] = useState<'raw' | 'preview' | 'graph'>('preview'); 
   const [activeTab, setActiveTab] = useState<'docs' | 'chat'>('docs');
   const importInputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -62,6 +65,39 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
       logsEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [logs]);
+
+  // --- Graph Visualization Logic ---
+  const dependencyGraphMermaid = useMemo(() => {
+    if (!knowledgeGraph || Object.keys(knowledgeGraph).length === 0) return '';
+    
+    // Create a simplified dependency graph for visualization
+    const nodes = new Set<string>();
+    const edges = new Set<string>();
+    
+    Object.values(knowledgeGraph).forEach((sym: CodeSymbol) => {
+        // Only show High Complexity or highly referenced symbols to avoid spaghetti
+        const isImportant = sym.complexityScore > 5 || sym.relationships.calledBy.length > 0 || sym.relationships.calls.length > 0;
+        
+        if (isImportant) {
+            const cleanId = sym.id.replace(/[^a-zA-Z0-9]/g, '_');
+            const label = `${sym.name} (${sym.kind})`;
+            nodes.add(`${cleanId}["${label}"]`);
+
+            sym.relationships.calls.forEach(targetId => {
+                const targetSym = knowledgeGraph[targetId];
+                if (targetSym) {
+                    const cleanTarget = targetId.replace(/[^a-zA-Z0-9]/g, '_');
+                    edges.add(`${cleanId} --> ${cleanTarget}`);
+                }
+            });
+        }
+    });
+
+    if (nodes.size === 0) return 'graph TD\nEmpty["هنوز گرافی تشکیل نشده است"]';
+
+    return `graph TD\n${Array.from(nodes).join('\n')}\n${Array.from(edges).join('\n')}`;
+  }, [knowledgeGraph]);
+
 
   // --- Handlers ---
   const handleStartProcessing = () => {
@@ -410,6 +446,8 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                { id: 'cookbook', label: 'راهنمای توسعه (Cookbook)', desc: 'سناریوهای افزودن فیچر', icon: BookOpen }, // New
                { id: 'dataFlow', label: 'جریان داده (Data Flow)', desc: 'حرکت داده در سیستم', icon: Workflow }, // New
                { id: 'useCase', label: 'موارد استفاده (Use Case)', desc: 'نقش‌ها و قابلیت‌ها', icon: Users }, // New
+               { id: 'userJourney', label: 'نقشه سفر کاربر', desc: 'تجربه کاربری و مراحل', icon: Map }, // New
+               { id: 'stateDiagram', label: 'ماشین وضعیت (State)', desc: 'تحلیل لاجیک‌های پیچیده', icon: Share2 }, // New
                { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', icon: Layers },
                { id: 'erd', label: 'دیتابیس (ERD)', desc: 'مدل داده (Prisma/SQL)', icon: Database },
                { id: 'classDiagram', label: 'نمودار کلاس', desc: 'تحلیل شی‌گرایی', icon: Box },
@@ -508,12 +546,13 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                   <button onClick={() => setViewMode('preview')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'preview' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Eye className="w-3 h-3" /> بصری</button>
                   <button onClick={() => setViewMode('raw')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'raw' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Code className="w-3 h-3" /> کد</button>
+                  <button onClick={() => setViewMode('graph')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'graph' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Share2 className="w-3 h-3" /> گراف</button>
                 </div>
               </div>
             </div>
 
             <div className="flex-1 bg-white px-8 pb-8 overflow-y-auto custom-scrollbar">
-              {!generatedDoc ? (
+              {!generatedDoc && viewMode !== 'graph' ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-6">
                   <div className="relative">
                      <div className="absolute inset-0 bg-brand-100 rounded-full blur-xl opacity-50"></div>
@@ -525,6 +564,14 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                     <h3 className="text-lg font-bold text-slate-700">مستندات خالی است</h3>
                     <p className="text-sm text-slate-400 mt-2">پروژه را انتخاب کنید و دکمه شروع را بزنید</p>
                   </div>
+                </div>
+              ) : viewMode === 'graph' ? (
+                <div className="h-full flex flex-col">
+                    <StatsWidget />
+                    <div className="flex-1 border border-slate-200 rounded-3xl p-4 bg-slate-50 shadow-inner">
+                        <h3 className="text-center font-bold text-slate-700 mb-2 flex items-center justify-center gap-2"><BrainCircuit className="w-5 h-5 text-brand-500"/> گراف وابستگی هوشمند</h3>
+                        <MermaidRenderer code={dependencyGraphMermaid} />
+                    </div>
                 </div>
               ) : viewMode === 'raw' ? (
                 <pre className="font-mono text-sm leading-loose whitespace-pre-wrap bg-[#1E293B] text-slate-300 p-8 rounded-3xl dir-ltr shadow-inner shadow-black/50 border border-slate-700">{generatedDoc}</pre>

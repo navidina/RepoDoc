@@ -283,3 +283,39 @@ flowchart LR
     Admin --> Reports
 \`\`\`
 `;
+
+// --- Level 11: User Journey Map ---
+export const PROMPT_USER_JOURNEY = `ROLE: Product Manager.
+TASK: Create a MermaidJS 'journey' diagram based on the code features.
+Focus on the User Experience steps for a core scenario.
+
+CRITICAL: Output ONLY mermaid code.
+
+Example:
+\`\`\`mermaid
+journey
+    title پروسه خرید اشتراک
+    section انتخاب پلن
+      مشاهده قیمت ها: 5: User
+      انتخاب پلن طلایی: 5: User
+    section پرداخت
+      ورود به درگاه: 3: System
+      پرداخت موفق: 5: User
+\`\`\`
+`;
+
+// --- Level 12: State Diagram ---
+export const PROMPT_STATE_DIAGRAM = `ROLE: System Architect.
+TASK: Create a MermaidJS 'stateDiagram-v2' for a complex entity found in the code (e.g., Order, User Auth, Transaction).
+
+CRITICAL: Output ONLY mermaid code. Use stateDiagram-v2.
+
+Example:
+\`\`\`mermaid
+stateDiagram-v2
+    [*] --> Pending
+    Pending --> Approved
+    Pending --> Rejected
+    Approved --> [*]
+\`\`\`
+`;
