@@ -36,7 +36,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   const vectorStoreRef = useRef<LocalVectorStore | null>(null);
 
   // --- Hooks ---
-  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats } = useRepoProcessor();
+  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, repoSummary, repoIntel } = useRepoProcessor();
   const { chatMessages, chatInput, setChatInput, isChatLoading, isRetrieving, handleSendMessage } = useChat(config, vectorStoreRef, hasContext);
 
   useEffect(() => {
@@ -101,6 +101,138 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     a.download = 'DOCUMENTATION.md';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadJson = () => {
+    const payload = {
+      generatedDoc,
+      repoSummary,
+      repoIntel,
+      stats,
+      generatedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'documentation.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const buildHtmlExport = () => {
+    const escapeHtml = (value: string) =>
+      value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const lines = generatedDoc.split('\n');
+    const tocItems: { level: number; text: string; id: string }[] = [];
+    const htmlLines: string[] = [];
+    let inCode = false;
+    let codeBuffer: string[] = [];
+
+    const flushCode = () => {
+      if (!codeBuffer.length) return;
+      htmlLines.push(`<pre>${escapeHtml(codeBuffer.join('\n'))}</pre>`);
+      codeBuffer = [];
+    };
+
+    lines.forEach((line) => {
+      if (line.startsWith('```')) {
+        if (inCode) {
+          flushCode();
+          inCode = false;
+        } else {
+          inCode = true;
+        }
+        return;
+      }
+      if (inCode) {
+        codeBuffer.push(line);
+        return;
+      }
+      const headingMatch = /^(#{1,6})\s+(.*)/.exec(line);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = headingMatch[2];
+        const id = text.replace(/[^\w\u0600-\u06FF]+/g, '-').toLowerCase();
+        tocItems.push({ level, text, id });
+        htmlLines.push(`<h${level} id="${id}">${escapeHtml(text)}</h${level}>`);
+        return;
+      }
+      if (line.startsWith('- ')) {
+        htmlLines.push(`<li>${escapeHtml(line.slice(2))}</li>`);
+        return;
+      }
+      htmlLines.push(`<p>${escapeHtml(line)}</p>`);
+    });
+    flushCode();
+
+    const renderedHtml = htmlLines.join('\n')
+      .replace(/(<li>.*<\/li>)(\n)(?!<li>)/g, '$1</ul>')
+      .replace(/(<li>)/g, '<ul>$1');
+
+    const tocHtml = tocItems
+      .map((item) => `<li class="toc-item level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`)
+      .join('\n');
+
+    return `<!doctype html>
+<html lang="fa">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Repository Documentation</title>
+    <style>
+      body { font-family: sans-serif; margin: 0; background: #f8fafc; color: #0f172a; }
+      header { background: #0f172a; color: #fff; padding: 24px; }
+      main { display: grid; grid-template-columns: 280px 1fr; gap: 24px; padding: 24px; }
+      nav { background: #fff; border-radius: 16px; padding: 16px; height: fit-content; position: sticky; top: 24px; }
+      nav h2 { font-size: 16px; margin: 0 0 8px; }
+      .toc-item { list-style: none; margin: 4px 0; }
+      .toc-item a { text-decoration: none; color: #1d4ed8; }
+      .level-2 { margin-right: 12px; }
+      .level-3 { margin-right: 24px; }
+      section { background: #fff; border-radius: 16px; padding: 24px; }
+      pre { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 12px; overflow-x: auto; }
+      h1, h2, h3 { margin-top: 24px; }
+      ul { padding-right: 20px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>مستندات جامع مخزن</h1>
+      <p>گزارش تولید شده در ${new Date().toLocaleString('fa-IR')}</p>
+    </header>
+    <main>
+      <nav>
+        <h2>فهرست مطالب</h2>
+        <ul>${tocHtml}</ul>
+      </nav>
+      <section>
+        ${renderedHtml}
+      </section>
+    </main>
+  </body>
+</html>`;
+  };
+
+  const downloadHtml = () => {
+    const html = buildHtmlExport();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'documentation.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPdf = () => {
+    const html = buildHtmlExport();
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -188,6 +320,53 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                     </div>
                 ))}
             </div>
+        </div>
+      </div>
+    );
+  };
+
+  const repoTypeLabel = (type: string) => {
+    switch (type) {
+      case 'frontend':
+        return 'فرانت‌اند';
+      case 'backend':
+        return 'بک‌اند';
+      case 'fullstack':
+        return 'فول‌استک';
+      default:
+        return 'نامشخص';
+    }
+  };
+
+  const repoTypeBadgeClass = (type: string) => {
+    switch (type) {
+      case 'frontend':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'backend':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'fullstack':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+      default:
+        return 'bg-slate-100 text-slate-600 border-slate-200';
+    }
+  };
+
+  const RepoSummaryCard = () => {
+    if (!repoSummary) return null;
+
+    return (
+      <div className="not-prose bg-white p-6 rounded-[2rem] border border-slate-100 shadow-soft mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-brand-50 p-3 rounded-2xl text-brand-600 border border-brand-100">
+            <Server className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-slate-800">مخزن شناسایی‌شده</h3>
+            <p className="text-sm text-slate-500 font-medium dir-ltr">{repoSummary.name}</p>
+          </div>
+        </div>
+        <div className={`px-4 py-2 rounded-xl border text-sm font-bold ${repoTypeBadgeClass(repoSummary.type)}`}>
+          {repoTypeLabel(repoSummary.type)}
         </div>
       </div>
     );
@@ -490,7 +669,14 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                 <div className="flex gap-3">
                   <input type="file" accept=".md,.markdown" ref={importInputRef} className="hidden" onChange={handleImportMarkdown} />
                   <button onClick={() => importInputRef.current?.click()} className="text-xs font-bold bg-white text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all border border-slate-200 shadow-sm"><Upload className="w-4 h-4" /> <span className="hidden sm:inline">آپلود</span></button>
-                  {generatedDoc && (<button onClick={downloadMarkdown} className="text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-slate-900/20"><Download className="w-4 h-4" /> <span className="hidden sm:inline">ذخیره</span></button>)}
+                  {generatedDoc && (
+                    <>
+                      <button onClick={downloadMarkdown} className="text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-slate-900/20"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Markdown</span></button>
+                      <button onClick={downloadJson} className="text-xs font-bold bg-white text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all border border-slate-200 shadow-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">JSON</span></button>
+                      <button onClick={downloadHtml} className="text-xs font-bold bg-white text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all border border-slate-200 shadow-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">HTML</span></button>
+                      <button onClick={downloadPdf} className="text-xs font-bold bg-white text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all border border-slate-200 shadow-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">PDF</span></button>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                   <button onClick={() => setViewMode('preview')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'preview' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Eye className="w-3 h-3" /> بصری</button>
@@ -518,6 +704,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
               ) : (
                 <div className="prose prose-slate max-w-none dir-rtl prose-headings:font-bold prose-headings:text-slate-800 prose-p:text-slate-600 prose-pre:rounded-2xl prose-pre:shadow-lg prose-img:rounded-2xl">
                   {/* Creative Stats Widget Rendered Here */}
+                  <RepoSummaryCard />
                   <StatsWidget />
                   <MarkdownRenderer content={generatedDoc} />
                 </div>
