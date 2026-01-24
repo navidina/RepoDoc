@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart, CheckCircle2, FileText, Cpu, Search, PenTool, ArrowRight, BookOpen, Workflow } from 'lucide-react';
+import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Users, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart, CheckCircle2, FileText, Cpu, Search, PenTool, ArrowRight, BookOpen, Workflow } from 'lucide-react';
 import { OllamaConfig, ProcessingLog } from '../types';
 import { LocalVectorStore } from '../services/vectorStore';
 import { IGNORED_DIRS, ALLOWED_EXTENSIONS } from '../utils/constants';
@@ -26,8 +26,9 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   const [docLevels, setDocLevels] = useState({
     root: true, 
     code: true, 
-    cookbook: true, // New
-    dataFlow: true, // New
+    cookbook: true,
+    dataFlow: true,
+    useCase: true, // New
     arch: false, 
     ops: false, 
     sequence: true, 
@@ -408,6 +409,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + راهنمای توسعه', icon: Code },
                { id: 'cookbook', label: 'راهنمای توسعه (Cookbook)', desc: 'سناریوهای افزودن فیچر', icon: BookOpen }, // New
                { id: 'dataFlow', label: 'جریان داده (Data Flow)', desc: 'حرکت داده در سیستم', icon: Workflow }, // New
+               { id: 'useCase', label: 'موارد استفاده (Use Case)', desc: 'نقش‌ها و قابلیت‌ها', icon: Users }, // New
                { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', icon: Layers },
                { id: 'erd', label: 'دیتابیس (ERD)', desc: 'مدل داده (Prisma/SQL)', icon: Database },
                { id: 'classDiagram', label: 'نمودار کلاس', desc: 'تحلیل شی‌گرایی', icon: Box },

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { OllamaConfig, ProcessingLog, ProcessedFile, CodeSymbol, FileMetadata } from '../types';
-import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_COOKBOOK, PROMPT_DATA_FLOW, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_9_INFRA } from '../utils/constants';
+import { IGNORED_DIRS, ALLOWED_EXTENSIONS, CONFIG_FILES, LANGUAGE_MAP, PROMPT_LEVEL_1_ROOT, PROMPT_LEVEL_2_CODE, PROMPT_COOKBOOK, PROMPT_DATA_FLOW, PROMPT_LEVEL_7_ERD, PROMPT_LEVEL_8_CLASS, PROMPT_LEVEL_5_SEQUENCE, PROMPT_LEVEL_9_INFRA, PROMPT_USE_CASE } from '../utils/constants';
 import { checkOllamaConnection, generateCompletion } from '../services/ollamaService';
 import { extractFileMetadata, buildGraph, generateContentHash } from '../services/codeParser';
 import { LocalVectorStore } from '../services/vectorStore';
@@ -195,12 +195,13 @@ export const useRepoProcessor = () => {
         statsMarkdown = `\n| زبان | خط کد | درصد |\n| :--- | :--- | :--- |\n${processedStats.map(s => `| **${s.lang}** | ${s.lines.toLocaleString()} | ${s.percent}% |`).join('\n')}\n`;
       }
 
-      let parts: any = { root: '', cookbook: '', arch: '', ops: '', seq: '', dataFlow: '', api: '', erd: '', class: '', infra: '', code: '' };
+      let parts: any = { root: '', cookbook: '', useCase: '', dataFlow: '', arch: '', ops: '', seq: '', api: '', erd: '', class: '', infra: '', code: '' };
       
       const assembleDoc = () => {
           let doc = `# مستندات جامع پروژه (GraphRAG Enabled)\n\nتولید شده توسط رایان هم‌افزا\nتاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
           if (statsMarkdown) doc += `## 📊 آمار پروژه\n\n${statsMarkdown}\n\n---\n\n`;
           if (parts.root) doc += `${parts.root}\n\n---\n\n`;
+          if (parts.useCase) doc += `## 🎭 نمودار موارد استفاده (Use Case Diagram)\n\n${parts.useCase}\n\n---\n\n`;
           if (parts.cookbook) doc += `${parts.cookbook}\n\n---\n\n`;
           if (parts.dataFlow) doc += `## 🔄 جریان داده (Data Flow)\n\n${parts.dataFlow}\n\n---\n\n`;
           if (parts.arch) doc += `## 🏗 معماری سیستم\n\n${parts.arch}\n\n---\n\n`;
@@ -275,6 +276,12 @@ export const useRepoProcessor = () => {
       if (docLevels.root) {
           parts.root = await generateCompletion(config, reducedContext, PROMPT_LEVEL_1_ROOT);
           setGeneratedDoc(assembleDoc());
+      }
+      if (docLevels.useCase) {
+        addLog('در حال ترسیم نمودار موارد استفاده (Use Case)...', 'info');
+        const useCaseContext = `Project Structure:\n${fileTree}\nPackage Info:\n${configContents.find(c => c.includes('package.json')) || ''}\nReadme/Intro:\n${parts.root || ''}`;
+        parts.useCase = extractMermaidCode(await generateCompletion(config, useCaseContext + strictModeSuffix, PROMPT_USE_CASE));
+        setGeneratedDoc(assembleDoc());
       }
       if (docLevels.cookbook) {
         parts.cookbook = await generateCompletion(config, `Project Structure:\n${fileTree}\nConfig:\n${configContents}`, PROMPT_COOKBOOK);

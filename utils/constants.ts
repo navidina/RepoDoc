@@ -246,3 +246,40 @@ flowchart LR
     Handler --> DB[("دیتابیس")]
 \`\`\`
 `;
+
+// --- Level 10: Use Case Diagram ---
+export const PROMPT_USE_CASE = `ROLE: Product Manager & System Architect.
+TASK: Create a Use Case Diagram using MermaidJS 'flowchart LR'.
+
+CRITICAL RULES:
+1. **Actors:** Define actors using double parentheses: \`Admin((Admin))\`.
+2. **Use Cases:** Define use cases using rounded brackets: \`Login(ورود به سیستم)\`.
+3. **Relationships:** Connect actors to use cases with arrows: \`Admin --> Login\`.
+4. **Subsystems:** Group related use cases inside \`subgraph\`.
+5. **Language:** Actor names in English, Use Case descriptions in Persian.
+
+Example Output:
+\`\`\`mermaid
+flowchart LR
+    User((کاربر عادی))
+    Admin((مدیر سیستم))
+
+    subgraph "پنل کاربری"
+        Login(ورود به حساب)
+        ViewDash(مشاهده داشبورد)
+        EditProfile(ویرایش پروفایل)
+    end
+
+    subgraph "مدیریت"
+        ManageUsers(مدیریت کاربران)
+        Reports(گزارش‌گیری)
+    end
+
+    User --> Login
+    User --> ViewDash
+    User --> EditProfile
+    Admin --> Login
+    Admin --> ManageUsers
+    Admin --> Reports
+\`\`\`
+`;
