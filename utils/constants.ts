@@ -1,5 +1,4 @@
 
-
 export const IGNORED_DIRS = new Set([
   // JavaScript / Web
   'node_modules', '.git', '.vscode', '.idea', 'dist', 'build', 'coverage', 'tmp', 'temp', '.next', 'public',
@@ -53,7 +52,7 @@ export const CONFIG_FILES = new Set([
   'package.json', 'tsconfig.json', 'Dockerfile', 'docker-compose.yml',
   'requirements.txt', 'Cargo.toml', 'go.mod', 'pom.xml', 'Gemfile',
   'Makefile', 'README.md', 'vite.config.ts', 'vite.config.js', 'webpack.config.js',
-  'schema.prisma', 'main.tf'
+  'schema.prisma', 'main.tf', '.env.example', 'tailwind.config.js', 'next.config.js'
 ]);
 
 export const DEFAULT_MODEL = 'qwen2.5-coder:14b';
@@ -73,20 +72,6 @@ export const PROMPT_LEVEL_1_ROOT = `شما یک نویسنده فنی (Technical
 2. **بدون مقدمه انگلیسی:** به هیچ عنوان توضیحات انگلیسی در شروع یا پایان ننویسید.
 3. **فرمت:** از فرمت استاندارد Markdown استفاده کنید.
 
-مثال خروجی (Example Output):
-# نام پروژه
-این پروژه یک سیستم مدیریت محتوا است که با React و Node.js توسعه یافته است.
-
-## 🛠 تکنولوژی‌های استفاده شده
-- زبان: TypeScript
-- فریم‌ورک: Next.js
-
-## 🚀 راهنمای نصب
-\`\`\`bash
-npm install
-npm run dev
-\`\`\`
-
 ساختار مورد انتظار:
 # [نام پروژه]
 (یک پاراگراف جذاب فارسی درباره اینکه این پروژه چیست و چه مشکلی را حل می‌کند)
@@ -103,50 +88,38 @@ npm run dev
 ## ✨ ویژگی‌های کلیدی
 (لیست ویژگی‌ها به فارسی)`;
 
-// --- Level 2: Code Documentation (Updated for Deep Analysis) ---
-export const PROMPT_LEVEL_2_CODE = `ROLE: Senior Software Architect & Technical Writer.
-TASK: Perform a DEEP CODE ANALYSIS of the provided source file.
-TARGET AUDIENCE: Senior Developers who need to understand, debug, or refactor this code.
+// --- Level 2: Code Documentation (Updated for Developer Guide) ---
+export const PROMPT_LEVEL_2_CODE = `ROLE: Senior Lead Developer onboarding a Junior Dev.
+TASK: Explain the internals of this file so a new developer can MODIFY or EXTEND it safely.
 
-CRITICAL INSTRUCTIONS:
-1. **Language:** The visible documentation MUST be in **Persian (Farsi)**.
-2. **Detail Level:** Do NOT just summarize. Explain *HOW* the code works, not just *WHAT* it does.
-3. **Structure:** Follow the output format strictly.
+INPUT:
+1. File Path & Metadata
+2. Source Code
+3. Symbol Context (What uses this file?)
 
-OUTPUT FORMAT:
+CRITICAL INSTRUCTION: Output MUST be in **Persian (Farsi)**.
 
-# تحلیل فایل: [نام فایل]
+OUTPUT STRUCTURE (Markdown):
 
-## 🎯 هدف و مسئولیت (Purpose)
-(یک پاراگراف فنی و دقیق درباره اینکه این فایل چه کاری انجام می‌دهد و چرا وجود دارد)
+# تحلیل ماژول: [نام فایل]
 
-## ⚙️ تحلیل توابع و کلاس‌ها (Deep Dive)
-(برای هر کلاس یا تابع اصلی، این ساختار را تکرار کن:)
+## 🔍 مکانیزم داخلی (Internal Mechanics)
+(توضیح دهید کد *چگونه* کار می‌کند، نه فقط چه کاری انجام می‌دهد. اگر الگوریتم خاصی دارد، آن را باز کنید.)
 
-### 🔹 \`[نام کلاس/تابع]\`
-- **نوع:** (مثلاً: React Component, API Handler, Helper Function)
-- **ورودی‌ها (Inputs):**
-  - \`نام پارامتر\`: (نوع دیتا) - توضیح دقیق نقش این پارامتر
-- **خروجی (Return):**
-  - (نوع خروجی) - توضیح آنچه برمی‌گرداند.
-- **منطق عملکرد (Logic Flow):**
-  1. (توضیح مرحله ۱ لاجیک)
-  2. (توضیح مرحله ۲...)
-  3. (توضیح نحوه مدیریت خطا یا انشعاب شرطی)
-- **مثال استفاده (Usage):**
-\`\`\`typescript
-// کد کوتاه نمونه نحوه فراخوانی
-\`\`\`
+## 🛠 راهنمای توسعه و تغییر (Modification Guide)
+- **اگر بخواهم [عملکرد مهم فایل] را تغییر دهم:** توضیح دهید کدام توابع باید ویرایش شوند.
+- **نقاط اتصال (Extension Points):** آیا اینتررفیس یا کلاسی برای ارث‌بری وجود دارد؟
 
-## 🧩 مدیریت وضعیت و هوک‌ها (State & Hooks)
-(اگر فایل React است: توضیح stateها و useEffectها. اگر Backend است: دیتابیس یا سرویس‌های خارجی)
+## 🔗 تحلیل وابستگی (Dependency Impact)
+- **این فایل وابسته است به:** (لیست ماژول‌های ایمپورت شده مهم)
+- **تغییر در این فایل روی موارد زیر اثر می‌گذارد:** (توضیح بر اساس ورودی Context که چه فایل‌هایی از این استفاده می‌کنند)
 
-## ⚠️ نکات مهم و لبه‌ای (Edge Cases)
-- (نکات امنیتی، پرفورمنس، یا باگ‌های احتمالی)
+## ⚠️ نکات کلیدی و تست
+(نکات امنیتی، پرفورمنس، یا نحوه تست کردن این ماژول به صورت ایزوله)
 
 ---
 **SUMMARY_FOR_CONTEXT**
-(Technical summary in English strictly for RAG context. Focus on exports and dependencies. Max 50 words.)
+(Technical summary in English strictly for RAG context. Focus on exports and logic. Max 50 words.)
 `;
 
 // --- Level 3: Architecture Documentation ---
@@ -161,18 +134,31 @@ export const PROMPT_LEVEL_3_ARCH = `شما معمار نرم‌افزار هست
 3. **بدون دیاگرام:** در این بخش دیاگرام نکشید، فقط متن توضیحی بنویسید.
 `;
 
-// --- Level 4: Operational Documentation ---
-export const PROMPT_LEVEL_4_OPS = `شما مهندس DevOps هستید.
-وظیفه: نوشتن راهنمای عملیاتی (Runbook).
+// --- Level 4: Cookbook (New) ---
+export const PROMPT_COOKBOOK = `ROLE: Technical Lead / Mentor.
+TASK: Create a "Developer Cookbook" with 3-5 practical scenarios based on the project structure.
+LANGUAGE: Persian (Farsi).
 
-ورودی: فایل‌های کانفیگ (Dockerfile, package.json, etc).
+INPUT:
+1. File Tree
+2. Package.json / Config files
 
-قوانین:
-1. **زبان فارسی:** تمام دستورالعمل‌ها باید فارسی باشد.
-2. **محتوا:** پیش‌نیازها، متغیرهای محیطی (ENV)، نحوه بیلد و دیپلوی.
-`;
+OUTPUT FORMAT:
+# 🍲 کتاب آشپزی توسعه (Developer Cookbook)
 
-// --- Level 5: Sequence Diagram (Updated: Professional) ---
+این بخش شامل سناریوهای رایج برای توسعه این پروژه است.
+
+## سناریو ۱: [عنوان سناریو، مثلا: نحوه اضافه کردن یک API جدید]
+**گام ۱:** فایل [مسیر فایل] را باز کنید.
+**گام ۲:** کلاس/تابع [نام] را اکستند کنید.
+**گام ۳:** [توضیح گام بعدی...]
+
+## سناریو ۲: [عنوان سناریو، مثلا: نحوه ساخت کامپوننت جدید]
+...
+
+(Create scenarios relevant to the detected tech stack e.g., React, Express, Python)`;
+
+// --- Level 5: Sequence Diagram ---
 export const PROMPT_LEVEL_5_SEQUENCE = `ROLE: Senior Software Architect.
 TASK: Create a DETAILED MermaidJS Sequence Diagram for the main logic flow.
 
@@ -180,60 +166,31 @@ CRITICAL RULES:
 1. **OUTPUT ONLY CODE:** Start with \`\`\`mermaid.
 2. **Features:** Use \`autonumber\`, \`box\`, \`alt\`, \`opt\`.
 3. **Participants:** Define participants explicitly at the top with clear names.
-4. **Labels:** ALL messages MUST be in Persian (Farsi) and wrapped in double quotes: \`A->>B: "پیام فارسی"\`.
-5. **Activation:** You MUST pair every \`activate Participant\` with a corresponding \`deactivate Participant\`. DO NOT deactivate a participant that is not active.
+4. **Labels:** ALL messages MUST be in Persian (Farsi) and wrapped in double quotes.
+5. **Activation:** You MUST pair every \`activate Participant\` with a corresponding \`deactivate Participant\`.
 
 Example Output:
 \`\`\`mermaid
 sequenceDiagram
     autonumber
-    box "Client Side" #f9f9f9
-        participant U as "User"
-        participant C as "Client"
-    end
-    box "Server Side" #ececff
-        participant S as "Server"
-        participant D as "Database"
-    end
-    
-    U->>C: "Click Button"
-    activate C
-    C->>S: "API Request"
+    participant U as "User"
+    participant S as "Server"
+    U->>S: "Login"
     activate S
-    S->>D: "Query"
-    activate D
-    D-->>S: "Result"
-    deactivate D
-    S-->>C: "Response"
+    S-->>U: "Token"
     deactivate S
-    C-->>U: "Show Data"
-    deactivate C
 \`\`\`
-`;
-
-// --- Level 6: OpenAPI / Swagger Generation ---
-export const PROMPT_LEVEL_6_API = `You are an API Spec Generator.
-Task: Generate OpenAPI 3.0 JSON.
-
-Rules:
-1. Output **ONLY** the valid JSON code block.
-2. Start with \`\`\`json and end with \`\`\`.
-3. Do not add any conversational text.
 `;
 
 // --- Level 7: ERD (Entity Relationship Diagram) ---
 export const PROMPT_LEVEL_7_ERD = `STRICT MODE: ACTIVATED.
 ROLE: Text-to-MermaidJS Converter.
-
-TASK: Create an 'erDiagram'.
+TASK: Create an 'erDiagram' based on SQL/Prisma schemas provided.
 
 CRITICAL RULES:
 1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
 2. NO summaries. NO explanations.
-3. Syntax:
-   - Use "erDiagram"
-   - Quote ALL labels: USER ||--o{ POST : "writes"
-   - PascalCase for entities (User, not user).
+3. Syntax: "erDiagram", Quote labels.
 
 Example Output:
 \`\`\`mermaid
@@ -245,67 +202,47 @@ erDiagram
 // --- Level 8: Class Diagram ---
 export const PROMPT_LEVEL_8_CLASS = `STRICT MODE: ACTIVATED.
 ROLE: Text-to-MermaidJS Converter.
-
 TASK: Create a 'classDiagram'.
 
 CRITICAL RULES:
 1. OUTPUT ONLY THE CODE BLOCK. Start immediately with \`\`\`mermaid.
-2. NO summaries. NO explanations.
-3. Syntax:
-   - Use "classDiagram"
-   - No spaces in class names.
-
-Example Output:
-\`\`\`mermaid
-classDiagram
-    class User {
-      +String name
-    }
-    class Admin
-    User <|-- Admin
-\`\`\`
+2. NO summaries.
+3. Syntax: "classDiagram", No spaces in class names.
 `;
 
-// --- Level 9: Infrastructure Diagram (Updated: Professional) ---
+// --- Level 9: Infrastructure Diagram ---
 export const PROMPT_LEVEL_9_INFRA = `ROLE: Cloud Architect.
-TASK: Create a COMPREHENSIVE MermaidJS Architecture Diagram.
+TASK: Create a MermaidJS Architecture Diagram including Config Files & Env Setup.
 
 CRITICAL RULES:
 1. **OUTPUT ONLY CODE:** Start with \`\`\`mermaid.
-2. **Grouping:** Use \`subgraph "Name"\` ... \`end\` (Ensure \`end\` is on a new line).
-3. **Styling:** Use \`classDef\` to color-code.
-4. **Shapes:**
-   - Use \`[("Label")]\` for Databases/Storage.
-   - Use \`["Label"]\` for standard components.
-   - Use \`(("Label"))\` for Start/End points or small markers.
-5. **Syntax:**
-   - Avoid special characters in Node IDs (use \`Node1\`, \`DB_Main\`).
-   - Quote ALL labels explicitly: \`id["Label Text"]\`.
+2. **Grouping:** Use \`subgraph\`.
+3. **Styling:** Use \`classDef\`.
 
 Example Output:
 \`\`\`mermaid
 flowchart TB
-    classDef client fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef service fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
-    classDef db fill:#fff3e0,stroke:#ef6c00,stroke-width:2px;
+    classDef config fill:#fff3e0,stroke:#ef6c00;
+    Config["config.json"]:::config
+    App["Application"]
+    Config --> App
+\`\`\`
+`;
 
-    subgraph "Client Layer"
-        Browser["React App"]:::client
-        Mobile["Mobile App"]:::client
-    end
+// --- New Data Flow Diagram ---
+export const PROMPT_DATA_FLOW = `ROLE: System Architect.
+TASK: Create a MermaidJS Flowchart showing key DATA FLOWS in the system.
 
-    subgraph "Backend Cluster"
-        API["API Gateway"]:::service
-        Auth["Auth Service"]:::service
-    end
+Focus on:
+1. User Input -> Handler -> State Update -> UI Re-render
+2. API Call -> Service -> Data Processing -> Store
 
-    subgraph "Data Persistence"
-        Redis[("Redis Cache")]:::db
-        PG[("PostgreSQL")]:::db
-    end
+CRITICAL: Output ONLY the mermaid code block. Use 'flowchart LR' or 'TB'. All labels in Persian.
 
-    Browser --> API
-    API --> Auth
-    Auth --> PG
+Example:
+\`\`\`mermaid
+flowchart LR
+    UserInput("ورودی کاربر") --> Handler[هندلر]
+    Handler --> DB[("دیتابیس")]
 \`\`\`
 `;

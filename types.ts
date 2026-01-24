@@ -29,9 +29,16 @@ export enum AppMode {
   SETTINGS = 'SETTINGS'
 }
 
-// --- CODEWIKI INTELLIGENCE TYPES (UPDATED) ---
+// --- CODEWIKI INTELLIGENCE TYPES (UPDATED FOR GRAPHRAG) ---
 
-export type SymbolKind = 'class' | 'function' | 'variable' | 'interface' | 'endpoint' | 'database_table' | 'import';
+export type SymbolKind = 'class' | 'function' | 'variable' | 'interface' | 'endpoint' | 'database_table' | 'import' | 'method';
+
+export interface SymbolRelationships {
+  calledBy: string[]; // List of Symbol IDs that call this symbol
+  calls: string[];    // List of Symbol IDs called by this symbol
+  inheritsFrom?: string[];
+  implementedIn?: string[];
+}
 
 export interface CodeSymbol {
   id: string;          // Unique Global ID (e.g., "src/services/auth.ts:loginUser")
@@ -42,8 +49,10 @@ export interface CodeSymbol {
   scope: string;       // 'global', 'class:UserService', 'function:init'
   codeSnippet: string; 
   docString?: string;  
-  references: ReferenceLocation[]; // Where is this symbol used?
-  imports?: string[]; // If it's a file/module, what does it import?
+  
+  // GraphRAG Data
+  relationships: SymbolRelationships;
+  complexityScore: number; // Cyclomatic Complexity
 }
 
 export interface ReferenceLocation {
@@ -55,6 +64,8 @@ export interface ReferenceLocation {
 export interface FileMetadata {
   path: string;
   language: string;
+  contentHash: string; // MD5/SHA hash for Incremental Indexing
+  lastProcessed: number;
   symbols: CodeSymbol[]; 
   dependencies: string[]; // List of imported file paths
   isDbSchema: boolean;
@@ -77,7 +88,8 @@ export interface VectorDocument {
     filePath: string;
     startLine?: number;
     endLine?: number;
-    symbolRef?: string; 
+    symbolId?: string; // Link to specific symbol in Graph
+    relatedSymbols?: string[]; // IDs of related symbols (GraphRAG injection)
   };
   embedding?: number[];
   tokens?: Set<string>; 
@@ -95,4 +107,5 @@ export interface ProcessedFile {
   size: number;
   lines: number;
   metadata: FileMetadata;
+  isCached?: boolean; // Flag to skip processing
 }

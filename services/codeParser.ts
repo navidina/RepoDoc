@@ -1,25 +1,54 @@
 
-import { FileMetadata, CodeSymbol, SymbolKind, ReferenceLocation, ProcessedFile } from '../types';
+import { FileMetadata, CodeSymbol, SymbolKind, ProcessedFile, SymbolRelationships } from '../types';
 
 /**
- * RAYAN AST-LITE ENGINE
- * A custom lexical analyzer that mimics AST behavior for JS/TS/Python/Go/Java.
- * It tokenizes code to understand Scope, Definitions, and Usage Context.
+ * RAYAN SEMANTIC ENGINE (v2.0)
+ * Replaces Regex with a Token-Stream State Machine.
+ * Features:
+ * 1. Scope Tracking (Global -> Class -> Method -> Block)
+ * 2. Complexity Analysis (Cyclomatic Score)
+ * 3. Hash Generation (Incremental Indexing)
+ * 4. Call Graph Building (GraphRAG)
  */
 
-// --- Tokenizer Utilities ---
+// --- Utils ---
 
-const TOKEN_PATTERNS = {
+export const generateContentHash = async (content: string): Promise<string> => {
+  // Simple DJB2 hash for string (fast and sufficient for client-side diffing)
+  let hash = 5381;
+  for (let i = 0; i < content.length; i++) {
+    hash = ((hash << 5) + hash) + content.charCodeAt(i); /* hash * 33 + c */
+  }
+  return hash.toString(16);
+};
+
+const calculateCyclomaticComplexity = (code: string): number => {
+  // Heuristic: Start at 1, add 1 for each branching construct
+  let score = 1;
+  const branchingPatterns = [
+    /\bif\b/g, /\belse\b/g, /\bfor\b/g, /\bwhile\b/g, 
+    /\bcase\b/g, /\bcatch\b/g, /\?.*:/g, /&&/g, /\|\|/g
+  ];
+  branchingPatterns.forEach(p => {
+    const matches = code.match(p);
+    if (matches) score += matches.length;
+  });
+  return score;
+};
+
+// --- Tokenizer ---
+
+const TOKEN_TYPES = {
   whitespace: /^\s+/,
-  comment: /^(\/\/.*|\/\*[\s\S]*?\*\/|#.*)/,
+  comment: /^(\/\/.*|\/\*[\s\S]*?\*\/|#.*|""".*""")/,
   string: /^(['"`])(?:\\.|(?!\1).)*\1/,
-  keyword: /^(export|import|class|function|const|let|var|def|interface|type|public|private|protected|static|async|return|if|else|for|while)\b/,
+  keyword: /^(export|import|from|class|function|const|let|var|def|interface|type|public|private|protected|static|async|await|return|if|else|for|while|try|catch|new|extends|implements)\b/,
   identifier: /^[a-zA-Z_$][a-zA-Z0-9_$]*/,
-  operator: /^[{}()[\].;,=:]/,
+  operator: /^[{}()[\].;,=:<>\+\-\*\/!&\|]/,
 };
 
 interface Token {
-  type: keyof typeof TOKEN_PATTERNS | 'unknown';
+  type: keyof typeof TOKEN_TYPES | 'unknown';
   value: string;
   line: number;
 }
@@ -33,7 +62,6 @@ const tokenize = (content: string): Token[] => {
     const char = content[cursor];
     const rest = content.slice(cursor);
 
-    // Skip Newlines for line counting
     if (char === '\n') {
       line++;
       cursor++;
@@ -41,16 +69,14 @@ const tokenize = (content: string): Token[] => {
     }
 
     let matched = false;
-    for (const [type, regex] of Object.entries(TOKEN_PATTERNS)) {
+    for (const [type, regex] of Object.entries(TOKEN_TYPES)) {
       const match = rest.match(regex);
       if (match) {
         if (type !== 'whitespace' && type !== 'comment') {
           tokens.push({ type: type as any, value: match[0], line });
         }
-        // Count newlines inside block comments or strings
         const newlines = (match[0].match(/\n/g) || []).length;
         line += newlines;
-        
         cursor += match[0].length;
         matched = true;
         break;
@@ -58,21 +84,24 @@ const tokenize = (content: string): Token[] => {
     }
 
     if (!matched) {
-      cursor++; // Skip unknown char
+      cursor++;
     }
   }
   return tokens;
 };
 
-// --- Parser Core ---
+// --- Semantic Parser (AST-Lite) ---
 
-class CodeParser {
+class SemanticParser {
   private tokens: Token[];
   private cursor = 0;
   private symbols: CodeSymbol[] = [];
   private filePath: string;
   private dependencies: Set<string> = new Set();
+  
+  // Scope Stack: Tracks where we are (e.g. ['global', 'class:User', 'method:login'])
   private scopeStack: string[] = ['global'];
+  private braceBalanceStack: number[] = [0]; // Tracks {} depth per scope
 
   constructor(content: string, filePath: string) {
     this.tokens = tokenize(content);
@@ -88,7 +117,9 @@ class CodeParser {
   }
 
   private generateId(name: string): string {
-    return `${this.filePath}:${this.scopeStack.join('.')}:${name}`;
+    // Sanitize scope for ID generation
+    const scopeStr = this.scopeStack.join('.').replace(/[:\s]/g, '_');
+    return `${this.filePath}:${scopeStr}:${name}`;
   }
 
   public parse(): FileMetadata {
@@ -98,71 +129,112 @@ class CodeParser {
       const token = this.advance();
       if (!token) break;
 
-      // 1. Block Scope Tracking
+      // 1. Scope Management (Brace Counting)
       if (token.value === '{') {
-        const prev = this.tokens[this.cursor - 2];
-        // Heuristic: If previous token was an identifier, assume it's the scope name
-        this.scopeStack.push(prev && prev.type === 'identifier' ? prev.value : 'block');
-      } 
-      else if (token.value === '}') {
-        if (this.scopeStack.length > 1) this.scopeStack.pop();
+        this.braceBalanceStack[this.braceBalanceStack.length - 1]++;
+      } else if (token.value === '}') {
+        this.braceBalanceStack[this.braceBalanceStack.length - 1]--;
+        // If balance hits 0, we exited the current scope
+        if (this.braceBalanceStack[this.braceBalanceStack.length - 1] === 0 && this.scopeStack.length > 1) {
+           this.scopeStack.pop();
+           this.braceBalanceStack.pop();
+        }
       }
 
-      // 2. Import Detection (Dependency Graph)
+      // 2. Dependency Tracking
       if (token.value === 'import' || token.value === 'from') {
-         // Look ahead for string literals
-         let lookahead = 0;
-         while (lookahead < 10) {
-           const t = this.peek(lookahead);
-           if (t?.type === 'string') {
-             this.dependencies.add(t.value.replace(/['"]/g, ''));
-             break;
-           }
-           if (t?.value === ';') break;
-           lookahead++;
-         }
+         this.parseImport();
       }
 
-      // 3. Definition Detection (Classes, Functions, Vars)
+      // 3. Definition Detection (State Machine)
       if (token.type === 'keyword') {
-        this.handleKeyword(token);
+        this.parseDefinition(token);
       }
     }
+
+    // Post-Process: Calculate Complexity for each symbol
+    this.symbols.forEach(sym => {
+       sym.complexityScore = calculateCyclomaticComplexity(sym.codeSnippet);
+    });
 
     return {
       path: this.filePath,
       language: extension,
+      contentHash: '', // Will be filled externally
+      lastProcessed: Date.now(),
       symbols: this.symbols,
       dependencies: Array.from(this.dependencies),
-      apiEndpoints: [], // TODO: specialized parser for routes
+      apiEndpoints: [],
       isDbSchema: ['sql', 'prisma'].includes(extension),
       isInfra: this.filePath.includes('docker') || extension === 'tf'
     };
   }
 
-  private handleKeyword(token: Token) {
+  private parseImport() {
+    let lookahead = 0;
+    while (lookahead < 15) { // Limit lookahead
+       const t = this.peek(lookahead);
+       if (t?.type === 'string') {
+         this.dependencies.add(t.value.replace(/['"]/g, ''));
+       }
+       if (t?.value === ';' || t?.value === '\n') break;
+       lookahead++;
+    }
+  }
+
+  private parseDefinition(token: Token) {
     const next1 = this.peek(0);
     const next2 = this.peek(1);
+    const next3 = this.peek(2);
 
-    // Case: class MyClass
+    let kind: SymbolKind | null = null;
+    let name = '';
+
+    // Pattern: class MyClass
     if (token.value === 'class' && next1?.type === 'identifier') {
-      this.addSymbol(next1.value, 'class', token.line);
+      kind = 'class';
+      name = next1.value;
+      this.enterScope(`class:${name}`);
     }
-    // Case: function myFunc
-    else if (token.value === 'function' && next1?.type === 'identifier') {
-      this.addSymbol(next1.value, 'function', token.line);
+    // Pattern: interface MyInterface
+    else if (token.value === 'interface' && next1?.type === 'identifier') {
+      kind = 'interface';
+      name = next1.value;
+      this.enterScope(`interface:${name}`);
     }
-    // Case: const myVar = ...
-    else if ((token.value === 'const' || token.value === 'let') && next1?.type === 'identifier') {
-      // Heuristic: Only track if top-level or class-level (ignore small local vars)
-      if (this.scopeStack.length <= 2) {
-         this.addSymbol(next1.value, 'variable', token.line);
-      }
+    // Pattern: function myFunc
+    else if ((token.value === 'function' || token.value === 'def') && next1?.type === 'identifier') {
+      kind = 'function';
+      name = next1.value;
+      this.enterScope(`function:${name}`);
     }
-    // Case: def my_func (Python)
-    else if (token.value === 'def' && next1?.type === 'identifier') {
-      this.addSymbol(next1.value, 'function', token.line);
+    // Pattern: const/let/var myVar = ...
+    else if ((token.value === 'const' || token.value === 'let' || token.value === 'var') && next1?.type === 'identifier') {
+       // Only track top-level or class-level variables
+       if (this.scopeStack.length <= 2) {
+          kind = 'variable';
+          name = next1.value;
+          // Variables don't usually create a brace scope like classes/funcs, so we don't enterScope
+       }
     }
+    // Pattern (TS/JS Method): public myMethod() or myMethod() {
+    else if (next1?.value === '(' && this.scopeStack[this.scopeStack.length-1].startsWith('class')) {
+       // Only if previous wasn't a reserved keyword (like 'if', 'while')
+       if (token.type === 'identifier') {
+          kind = 'method';
+          name = token.value;
+          this.enterScope(`method:${name}`);
+       }
+    }
+
+    if (kind && name) {
+      this.addSymbol(name, kind, token.line);
+    }
+  }
+
+  private enterScope(scopeName: string) {
+    this.scopeStack.push(scopeName);
+    this.braceBalanceStack.push(0);
   }
 
   private addSymbol(name: string, kind: SymbolKind, line: number) {
@@ -172,106 +244,103 @@ class CodeParser {
       kind,
       filePath: this.filePath,
       line,
-      scope: this.scopeStack[this.scopeStack.length - 1],
-      codeSnippet: `Source code at line ${line}`, // Placeholder, would extract actual text
-      references: []
+      scope: this.scopeStack[this.scopeStack.length - 2] || 'global', // Parent scope
+      codeSnippet: '', // Extracted later
+      relationships: { calledBy: [], calls: [] },
+      complexityScore: 0
     });
   }
 }
 
-// --- Cross-Reference Linker ---
+// --- GraphRAG Linker (Pass 2) ---
 
-export const resolveReferences = (files: ProcessedFile[]): { symbolTable: Record<string, CodeSymbol>, nameIndex: Record<string, string[]> } => {
+export const buildGraph = (files: ProcessedFile[]): { symbolTable: Record<string, CodeSymbol>, nameIndex: Record<string, string[]> } => {
   const symbolTable: Record<string, CodeSymbol> = {};
   const nameIndex: Record<string, string[]> = {};
 
-  // 1. Build Global Symbol Table
+  // 1. Initialize Tables
   files.forEach(file => {
     file.metadata.symbols.forEach(sym => {
       symbolTable[sym.id] = sym;
-      
       if (!nameIndex[sym.name]) nameIndex[sym.name] = [];
       nameIndex[sym.name].push(sym.id);
     });
   });
 
-  // 2. Scan for Usages (Naive Scan)
-  // Real implementation would use the Tokenizer again to find identifiers in usage context.
-  // Here we use a robust Regex on the whole content for performance, but filtered by imports.
+  // 2. Build Call Graph (Who calls who?)
+  // We scan the *content* of each symbol to see if it invokes other symbols.
   
-  files.forEach(sourceFile => {
-    const content = sourceFile.content;
-    
-    // Iterate over all known global symbols to see if they are used here
-    Object.keys(nameIndex).forEach(name => {
-      // Simple heuristic: If the file contains the string "Name", it *might* be a reference.
-      // We improve this by checking imports or if it's in the same directory.
-      if (content.includes(name)) {
-         // Determine which ID is relevant (Scope Resolution)
-         const candidateIds = nameIndex[name];
-         let bestMatchId: string | null = null;
-
-         for (const id of candidateIds) {
-           const defFile = symbolTable[id].filePath;
+  files.forEach(file => {
+    // For each defined symbol in this file
+    file.metadata.symbols.forEach(sourceSym => {
+      // Analyze its code snippet body (simplified)
+      const body = sourceSym.codeSnippet;
+      
+      // Check against all known symbol names
+      // Optimization: Filter candidate names by file dependencies first
+      
+      // For every other symbol in the universe (naive O(n^2), optimized by nameIndex)
+      Object.keys(nameIndex).forEach(targetName => {
+        if (body.includes(targetName)) {
+           // Potential call detected.
+           // Disambiguate: Which 'User' is it? (Import check)
+           const candidateIds = nameIndex[targetName];
            
-           // Self-reference?
-           if (defFile === sourceFile.path) continue;
-
-           // Is it imported?
-           const isImported = sourceFile.metadata.dependencies.some(dep => {
-             // Normalized check: './services/auth' vs 'services/auth.ts'
-             return defFile.includes(dep.replace(/^(\.\/|\.\.\/)/, ''));
-           });
-
-           if (isImported) {
-             bestMatchId = id;
-             break;
-           }
-         }
-
-         // Add Reference if confirmed
-         if (bestMatchId) {
-           // Find line number of usage
-           const lines = content.split('\n');
-           lines.forEach((line, idx) => {
-             if (line.includes(name) && !line.startsWith('import')) {
-               symbolTable[bestMatchId].references.push({
-                 filePath: sourceFile.path,
-                 line: idx + 1,
-                 snippet: line.trim()
-               });
+           for (const targetId of candidateIds) {
+             if (sourceSym.id === targetId) continue; // Self-reference
+             
+             const targetSym = symbolTable[targetId];
+             
+             // Is it reachable?
+             // 1. Same file?
+             // 2. Imported?
+             const isSameFile = file.path === targetSym.filePath;
+             const isImported = file.metadata.dependencies.some(dep => targetSym.filePath.includes(dep.replace('./', '')));
+             
+             if (isSameFile || isImported) {
+                // Link them!
+                if (!sourceSym.relationships.calls.includes(targetId)) {
+                    sourceSym.relationships.calls.push(targetId);
+                }
+                if (!targetSym.relationships.calledBy.includes(sourceSym.id)) {
+                    targetSym.relationships.calledBy.push(sourceSym.id);
+                }
              }
-           });
-         }
-      }
+           }
+        }
+      });
     });
   });
 
   return { symbolTable, nameIndex };
 };
 
-
-// --- Main Export ---
-
-export const extractFileMetadata = (content: string, path: string): FileMetadata => {
+export const extractFileMetadata = async (content: string, path: string): Promise<FileMetadata> => {
   try {
-    const parser = new CodeParser(content, path);
+    const parser = new SemanticParser(content, path);
     const metadata = parser.parse();
+    metadata.contentHash = await generateContentHash(content);
     
-    // Fill in snippet content for real this time
+    // Extract actual snippets
     const lines = content.split('\n');
     metadata.symbols.forEach(sym => {
        const start = Math.max(0, sym.line - 1);
-       const end = Math.min(lines.length, sym.line + 5);
+       // Simple heuristic: read until next empty line or 15 lines max
+       let end = Math.min(lines.length, sym.line + 15);
+       for(let i = sym.line; i < end; i++) {
+          if (lines[i].trim() === '}') { end = i + 1; break; }
+       }
        sym.codeSnippet = lines.slice(start, end).join('\n');
     });
 
     return metadata;
   } catch (e) {
-    console.warn(`Parser failed for ${path}, falling back to empty metadata.`, e);
+    console.warn(`Semantic Parser failed for ${path}`, e);
     return {
       path,
       language: 'text',
+      contentHash: '',
+      lastProcessed: Date.now(),
       symbols: [],
       dependencies: [],
       apiEndpoints: [],

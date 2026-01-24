@@ -4,7 +4,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import MermaidRenderer from './MermaidRenderer';
-import { useRepoProcessor } from '../hooks/useRepoProcessor'; 
 import { CodeSymbol } from '../types';
 import { ArrowRight, Code, MapPin } from 'lucide-react';
 
@@ -12,7 +11,6 @@ interface WikiLinkProps {
   symbolName: string;
   children: React.ReactNode;
   knowledgeGraph: Record<string, CodeSymbol>;
-  nameIndex?: Record<string, string[]>;
 }
 
 // Interactive WikiLink Component with "Go to Definition"
@@ -20,9 +18,7 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
   const [isHovered, setIsHovered] = useState(false);
   
   // Find symbol in graph. Since we pass the NAME, we need to find the ID.
-  // In a perfect world we pass the ID, but Markdown text is just text.
-  // We search for a symbol that matches this name.
-  const symbolEntry = Object.values(knowledgeGraph).find(s => s.name === symbolName);
+  const symbolEntry = (Object.values(knowledgeGraph) as CodeSymbol[]).find(s => s.name === symbolName);
 
   if (!symbolEntry) return <span className="text-slate-700 font-medium">{children}</span>;
 
@@ -59,7 +55,7 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
 
       {/* Code Preview Hover Card */}
       {isHovered && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-96 bg-[#1E293B] rounded-xl shadow-2xl border border-slate-700 text-left dir-ltr p-4 animate-in zoom-in-95 duration-200">
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-96 bg-[#1E293B] rounded-xl shadow-2xl border border-slate-700 text-left dir-ltr p-4 animate-in zoom-in-95 duration-200 pointer-events-none">
            <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-2">
               <span className="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1">
                 <Code className="w-3 h-3" />
@@ -70,11 +66,14 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
                 {symbolEntry.filePath}:{symbolEntry.line}
               </span>
            </div>
+           {symbolEntry.complexityScore > 10 && (
+             <div className="mb-2 text-[10px] text-orange-400 font-bold">⚠️ High Complexity: {symbolEntry.complexityScore}</div>
+           )}
            <pre className="text-xs font-mono text-slate-300 overflow-x-auto custom-scrollbar max-h-48 p-2 bg-slate-900 rounded-lg">
              {symbolEntry.codeSnippet || 'Loading snippet...'}
            </pre>
            <div className="mt-2 text-[10px] text-slate-500 flex justify-between items-center">
-              <span>Refs: {symbolEntry.references?.length || 0}</span>
+              <span>Calls: {symbolEntry.relationships?.calls?.length || 0} | Refs: {symbolEntry.relationships?.calledBy?.length || 0}</span>
               <span className="text-brand-400 flex items-center gap-1">Click to navigate <ArrowRight className="w-3 h-3" /></span>
            </div>
            {/* Arrow */}
@@ -85,29 +84,28 @@ const WikiLink: React.FC<WikiLinkProps> = ({ symbolName, children, knowledgeGrap
   );
 };
 
-const MarkdownRenderer = ({ content }: { content: string }) => {
-  const { knowledgeGraph } = useRepoProcessor();
+interface MarkdownRendererProps {
+  content: string;
+  knowledgeGraph?: Record<string, CodeSymbol>;
+}
 
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, knowledgeGraph = {} }) => {
   // Custom Text Renderer to detect symbols and auto-link them
   const TextRenderer = ({ children }: any) => {
     const text = String(children);
     if (!knowledgeGraph || Object.keys(knowledgeGraph).length === 0) return <>{children}</>;
 
-    // Split text by whitespace to check words
-    // NOTE: This is naive. Ideally, we would use a proper tokenizer or findAll.
-    // For React simplicity, we split by space and check exact matches.
+    // Split text by whitespace/punctuation to check words
     const parts = text.split(/(\s+|[,.;()])/); 
     
     return (
       <>
         {parts.map((part, i) => {
-           // Clean the part (remove punctuation if attached, though split helps)
            const cleanPart = part.trim();
            // Find if this word corresponds to a known Class/Function definition
-           // We filter out common words to avoid noise
-           const isSymbol = Object.values(knowledgeGraph).some(s => s.name === cleanPart && (s.kind === 'class' || s.kind === 'function' || s.kind === 'interface'));
+           const isSymbol = (Object.values(knowledgeGraph) as CodeSymbol[]).some(s => s.name === cleanPart && (s.kind === 'class' || s.kind === 'function' || s.kind === 'interface'));
            
-           if (isSymbol && cleanPart.length > 2) { // length check to avoid single var names like 'i'
+           if (isSymbol && cleanPart.length > 2) { 
               return <WikiLink key={i} symbolName={cleanPart} knowledgeGraph={knowledgeGraph}>{part}</WikiLink>;
            }
            return part;
@@ -170,3 +168,4 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
 };
 
 export default MarkdownRenderer;
+    

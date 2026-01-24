@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart, CheckCircle2, FileText, Cpu, Search, PenTool, ArrowRight } from 'lucide-react';
+import { File as FileIcon, Folder, Play, Loader2, Download, Info, Eye, Code, Upload, MessageSquare, Send, Bot, User, Database, Layers, Zap, LayoutTemplate, BrainCircuit, Github, BarChart3, Grip, Hash, Sparkles, Command, Box, Server, Terminal, Activity, PieChart, CheckCircle2, FileText, Cpu, Search, PenTool, ArrowRight, BookOpen, Workflow } from 'lucide-react';
 import { OllamaConfig, ProcessingLog } from '../types';
 import { LocalVectorStore } from '../services/vectorStore';
 import { IGNORED_DIRS, ALLOWED_EXTENSIONS } from '../utils/constants';
@@ -23,8 +24,17 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   const [githubUrl, setGithubUrl] = useState('');
   
   const [docLevels, setDocLevels] = useState({
-    root: true, code: true, arch: true, ops: false, sequence: true, 
-    api: false, erd: false, classDiagram: false, infra: false    
+    root: true, 
+    code: true, 
+    cookbook: true, // New
+    dataFlow: true, // New
+    arch: false, 
+    ops: false, 
+    sequence: true, 
+    api: false, 
+    erd: false, 
+    classDiagram: false, 
+    infra: false    
   });
 
   // --- UI State ---
@@ -36,7 +46,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
   const vectorStoreRef = useRef<LocalVectorStore | null>(null);
 
   // --- Hooks ---
-  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats } = useRepoProcessor();
+  const { logs, isProcessing, progress, generatedDoc, setGeneratedDoc, hasContext, setHasContext, processRepository, stats, knowledgeGraph } = useRepoProcessor();
   const { chatMessages, chatInput, setChatInput, isChatLoading, isRetrieving, handleSendMessage } = useChat(config, vectorStoreRef, hasContext);
 
   useEffect(() => {
@@ -65,7 +75,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
        let validCount = 0;
        
        // Quick Scan using constants
-       Array.from(fileList).forEach(file => {
+       Array.from(fileList).forEach((file: any) => {
            const filePath = file.webkitRelativePath || file.name;
            const pathParts = filePath.split('/');
            const hasIgnoredDir = pathParts.some(part => IGNORED_DIRS.has(part));
@@ -200,11 +210,10 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
     const stages = [
       { id: 1, label: 'اسکن فایل‌ها', icon: Search, threshold: 10 },
       { id: 2, label: 'ایندکس RAG', icon: Database, threshold: 30 },
-      { id: 3, label: 'تحلیل هوشمند', icon: BrainCircuit, threshold: 70 },
-      { id: 4, label: 'تولید مستندات', icon: PenTool, threshold: 100 },
+      { id: 3, label: 'تحلیل و سناریو', icon: BrainCircuit, threshold: 70 },
+      { id: 4, label: 'تولید نهایی', icon: PenTool, threshold: 100 },
     ];
     
-    // Simple logic to highlight stages
     if (progress > 10) currentPhaseIdx = 1;
     if (progress > 30) currentPhaseIdx = 2;
     if (progress > 80) currentPhaseIdx = 3;
@@ -394,9 +403,11 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
              <div className="bg-accent-pink/10 text-accent-pink p-2.5 rounded-xl shadow-sm"><Layers className="w-5 h-5" /></div>
              سطوح تحلیل و دیاگرام
           </h2>
-          <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+          <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
              {[
-               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + خلاصه', icon: Code },
+               { id: 'code', label: 'تحلیل کدها', desc: 'بررسی فایل به فایل + راهنمای توسعه', icon: Code },
+               { id: 'cookbook', label: 'راهنمای توسعه (Cookbook)', desc: 'سناریوهای افزودن فیچر', icon: BookOpen }, // New
+               { id: 'dataFlow', label: 'جریان داده (Data Flow)', desc: 'حرکت داده در سیستم', icon: Workflow }, // New
                { id: 'arch', label: 'معماری سیستم', desc: 'دیاگرام و پترن‌ها', icon: Layers },
                { id: 'erd', label: 'دیتابیس (ERD)', desc: 'مدل داده (Prisma/SQL)', icon: Database },
                { id: 'classDiagram', label: 'نمودار کلاس', desc: 'تحلیل شی‌گرایی', icon: Box },
@@ -519,7 +530,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                 <div className="prose prose-slate max-w-none dir-rtl prose-headings:font-bold prose-headings:text-slate-800 prose-p:text-slate-600 prose-pre:rounded-2xl prose-pre:shadow-lg prose-img:rounded-2xl">
                   {/* Creative Stats Widget Rendered Here */}
                   <StatsWidget />
-                  <MarkdownRenderer content={generatedDoc} />
+                  <MarkdownRenderer content={generatedDoc} knowledgeGraph={knowledgeGraph} />
                 </div>
               )}
             </div>
@@ -554,7 +565,7 @@ const BrowserGenerator: React.FC<BrowserGeneratorProps> = ({ config }) => {
                             : 'bg-white border border-slate-100 text-slate-700 rounded-tl-none shadow-soft'
                         }`}>
                             <div className="prose prose-sm max-w-none dir-rtl leading-relaxed">
-                                {msg.role === 'user' ? msg.content : <MarkdownRenderer content={msg.content} />}
+                                {msg.role === 'user' ? msg.content : <MarkdownRenderer content={msg.content} knowledgeGraph={knowledgeGraph} />}
                             </div>
                         </div>
                      </div>
