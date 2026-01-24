@@ -85,111 +85,135 @@ export const normalizeUseCaseDiagram = (diagram: string): string => {
     .map(line => line.trim())
     .filter(Boolean);
 
-  const wrapUseCase = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return trimmed;
-    if (trimmed.startsWith('(') && trimmed.endsWith(')')) return trimmed;
-    return `(${trimmed})`;
+  const sanitizeId = (value: string) => value.replace(/[^a-zA-Z0-9_]/g, '_');
+  const escapeLabel = (value: string) => value.replace(/"/g, '&quot;');
+  const cleanName = (value: string) => value.trim().replace(/^\(+|\)+$/g, '').replace(/^"+|"+$/g, '');
+
+  const actorId = (name: string) => `actor_${sanitizeId(name)}`;
+  const usecaseId = (name: string) => `usecase_${sanitizeId(name)}`;
+  const renderActorNode = (name: string) => `${actorId(name)}["👤 ${escapeLabel(name)}"]`;
+  const renderUsecaseNode = (name: string) => `${usecaseId(name)}(["${escapeLabel(name)}"])`;
+
+  const actors = new Set<string>();
+  const usecases = new Set<string>();
+  const edges = new Set<string>();
+  let seenHeader = false;
+
+  const ensureActor = (raw: string) => {
+    const name = cleanName(raw);
+    if (!name) return '';
+    actors.add(name);
+    return name;
   };
 
-  const wrapUseCaseIfNeeded = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return trimmed;
-    if ((trimmed.startsWith('(') && trimmed.endsWith(')')) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
-      return trimmed;
-    }
-    return /\s/.test(trimmed) ? wrapUseCase(trimmed) : trimmed;
+  const ensureUsecase = (raw: string) => {
+    const name = cleanName(raw);
+    if (!name) return '';
+    usecases.add(name);
+    return name;
   };
 
-  const declaredActors = new Set<string>();
-  const referencedActors = new Set<string>();
-  const normalizedLines: string[] = [];
+  const addRelation = (from: string, to: string, label?: string) => {
+    if (!from || !to) return;
+    const rendered = label
+      ? `${from} -->|${label}| ${to}`
+      : `${from} --> ${to}`;
+    edges.add(rendered);
+  };
 
   lines.forEach((line) => {
     if (line.toLowerCase() === 'usecasediagram') {
-      normalizedLines.push('usecaseDiagram');
+      if (seenHeader) return;
+      seenHeader = true;
       return;
     }
 
-    // Track declared actors
     const actorMatch = line.match(/^actor\s+(.+)$/i);
     if (actorMatch) {
-      const actorName = actorMatch[1].trim();
-      declaredActors.add(actorName);
-      normalizedLines.push(`actor ${actorName}`);
+      ensureActor(actorMatch[1]);
       return;
     }
 
-    // Normalize bare usecase declarations (e.g., "usecase Browse UI")
     const useCaseMatch = line.match(/^usecase\s+(.+)$/i);
     if (useCaseMatch) {
-      normalizedLines.push(`usecase ${wrapUseCase(useCaseMatch[1])}`);
+      ensureUsecase(useCaseMatch[1]);
       return;
     }
 
-    // Convert "include Browse UI, Upload Document" into valid Mermaid relations
+    const includeWithMatch = line.match(/^include\s+(.+?)\s+with\s+(.+)$/i);
+    if (includeWithMatch) {
+      const base = ensureUsecase(includeWithMatch[1]);
+      const inc = ensureUsecase(includeWithMatch[2]);
+      if (base && inc) addRelation(usecaseId(base), usecaseId(inc), '<<include>>');
+      return;
+    }
+
     const includeCommaMatch = line.match(/^include\s+(.+?)\s*,\s*(.+)$/i);
     if (includeCommaMatch) {
-      const base = wrapUseCase(includeCommaMatch[1]);
-      const includes = includeCommaMatch[2].split(',').map(part => wrapUseCase(part));
-      includes.forEach((inc) => {
-        normalizedLines.push(`${base} ..> ${inc} : <<include>>`);
+      const base = ensureUsecase(includeCommaMatch[1]);
+      includeCommaMatch[2].split(',').forEach((part) => {
+        const inc = ensureUsecase(part);
+        if (base && inc) addRelation(usecaseId(base), usecaseId(inc), '<<include>>');
       });
       return;
     }
 
-    // Convert "extend Manage Profile with (Edit Profile)"
-    const extendWithMatch = line.match(/^extend\s+(.+?)\s+with\s+(.+)$/i);
-    if (extendWithMatch) {
-      const base = wrapUseCase(extendWithMatch[1]);
-      const ext = wrapUseCase(extendWithMatch[2]);
-      normalizedLines.push(`${ext} ..> ${base} : <<extend>>`);
+    const includeInMatch = line.match(/^include\s+(.+?)\s+in\s+(.+)$/i);
+    if (includeInMatch) {
+      const inc = ensureUsecase(includeInMatch[1]);
+      const base = ensureUsecase(includeInMatch[2]);
+      if (base && inc) addRelation(usecaseId(base), usecaseId(inc), '<<include>>');
       return;
     }
 
-    let updated = line;
-    updated = updated.replace(/^include\s+(.+?)\s+in\s+\((.+?)\)/i, (_, inc, base) => {
-      return `${wrapUseCase(inc)} ..> ${wrapUseCase(base)} : <<include>>`;
-    });
-    updated = updated.replace(/^include\s+(.+?)\s+in\s+(.+)$/i, (_, inc, base) => {
-      return `${wrapUseCase(inc)} ..> ${wrapUseCase(base)} : <<include>>`;
-    });
-    updated = updated.replace(/^extend\s+(.+?)\s+in\s+\((.+?)\)/i, (_, ext, base) => {
-      return `${wrapUseCase(ext)} ..> ${wrapUseCase(base)} : <<extend>>`;
-    });
-    updated = updated.replace(/^extend\s+(.+?)\s+in\s+(.+)$/i, (_, ext, base) => {
-      return `${wrapUseCase(ext)} ..> ${wrapUseCase(base)} : <<extend>>`;
-    });
-
-    const dottedArrowMatch = updated.match(/^(.+?)\s*\.\.>\s*(.+)$/);
-    if (dottedArrowMatch) {
-      updated = `${wrapUseCaseIfNeeded(dottedArrowMatch[1])} ..> ${wrapUseCaseIfNeeded(dottedArrowMatch[2])}`;
+    const extendWithMatch = line.match(/^extend\s+(.+?)\s+with\s+(.+)$/i);
+    if (extendWithMatch) {
+      const base = ensureUsecase(extendWithMatch[1]);
+      const ext = ensureUsecase(extendWithMatch[2]);
+      if (base && ext) addRelation(usecaseId(ext), usecaseId(base), '<<extend>>');
+      return;
     }
 
-    const arrowMatch = updated.match(/^(.+?)\s*-->\s*(.+)$/);
+    const extendInMatch = line.match(/^extend\s+(.+?)\s+in\s+(.+)$/i);
+    if (extendInMatch) {
+      const ext = ensureUsecase(extendInMatch[1]);
+      const base = ensureUsecase(extendInMatch[2]);
+      if (base && ext) addRelation(usecaseId(ext), usecaseId(base), '<<extend>>');
+      return;
+    }
+
+    const arrowMatch = line.match(/^(.+?)\s*-->\s*(.+)$/);
     if (arrowMatch) {
-      updated = `${arrowMatch[1].trim()} --> ${wrapUseCaseIfNeeded(arrowMatch[2])}`;
-    }
+      const fromRaw = arrowMatch[1].trim();
+      const toRaw = arrowMatch[2].trim();
 
-    const arrowActorMatch = updated.match(/^([A-Za-z0-9_]+)\s*-->/);
-    if (arrowActorMatch && !arrowActorMatch[1].startsWith('(')) {
-      referencedActors.add(arrowActorMatch[1]);
+      const fromIsActor = /^\(?[A-Za-z0-9_]+\)?$/.test(fromRaw) && !fromRaw.startsWith('(');
+      const fromName = fromIsActor ? ensureActor(fromRaw) : ensureUsecase(fromRaw);
+      const toName = ensureUsecase(toRaw);
+      const fromId = fromIsActor ? actorId(fromName) : usecaseId(fromName);
+      if (fromName && toName) addRelation(fromId, usecaseId(toName));
     }
-
-    normalizedLines.push(updated);
   });
 
-  // Ensure actors referenced in arrows are declared
-  const missingActors = Array.from(referencedActors).filter(actor => !declaredActors.has(actor));
-  if (missingActors.length) {
-    const insertAt = normalizedLines.findIndex(line => line === 'usecaseDiagram') + 1;
-    const actorLines = missingActors.map(actor => `actor ${actor}`);
-    normalizedLines.splice(insertAt, 0, ...actorLines);
+  const actorNodes = Array.from(actors).map(renderActorNode);
+  const usecaseNodes = Array.from(usecases).map(renderUsecaseNode);
+
+  if (!actorNodes.length && !usecaseNodes.length) {
+    return `\`\`\`mermaid\nflowchart LR\n  fallback["Use case diagram not detected"]\n\`\`\``;
   }
 
-  const normalized = normalizedLines.map(line => `  ${line}`).map((line, idx) => idx === 0 ? line.trimStart() : line);
+  const mermaidLines = [
+    'flowchart LR',
+    '  subgraph Actors["Actors"]',
+    ...actorNodes.map(node => `    ${node}`),
+    '  end',
+    '  subgraph UseCases["Use Cases"]',
+    ...usecaseNodes.map(node => `    ${node}`),
+    '  end',
+    ...Array.from(edges).map(edge => `  ${edge}`)
+  ];
 
-  return `\`\`\`mermaid\n${normalized.join('\n')}\n\`\`\``;
+  return `\`\`\`mermaid\n${mermaidLines.join('\n')}\n\`\`\``;
 };
 
 const sanitizeNodeId = (value: string) => value.replace(/[^a-zA-Z0-9_]/g, '_');
