@@ -73,22 +73,86 @@ export const normalizeUseCaseDiagram = (diagram: string): string => {
   let body = match[1].trim();
   if (!body.toLowerCase().startsWith('usecasediagram')) return diagram;
 
-  body = body.replace(/^usecaseDiagram\s*/i, 'usecaseDiagram\n');
   body = body.replace(/\r/g, '');
-  body = body.replace(/\s{2,}/g, '\n  ');
+  body = body.replace(/^usecaseDiagram\s*/i, 'usecaseDiagram\n');
+
+  // If the model collapsed everything into one line, force breaks before key tokens
+  if (!body.includes('\n')) {
+    body = body.replace(/\b(actor|usecase|include|extend)\b/gi, '\n$1');
+  }
 
   const lines = body
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean);
 
-  const normalized = lines.map(line => {
-    if (line.toLowerCase() === 'usecasediagram') return 'usecaseDiagram';
+  const wrapUseCase = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+    if (trimmed.startsWith('(') && trimmed.endsWith(')')) return trimmed;
+    return `(${trimmed})`;
+  };
+
+  const declaredActors = new Set<string>();
+  const referencedActors = new Set<string>();
+  const normalizedLines: string[] = [];
+
+  lines.forEach((line) => {
+    if (line.toLowerCase() === 'usecasediagram') {
+      normalizedLines.push('usecaseDiagram');
+      return;
+    }
+
+    // Track declared actors
+    const actorMatch = line.match(/^actor\s+(.+)$/i);
+    if (actorMatch) {
+      const actorName = actorMatch[1].trim();
+      declaredActors.add(actorName);
+      normalizedLines.push(`actor ${actorName}`);
+      return;
+    }
+
+    // Convert "include Browse UI, Upload Document" into valid Mermaid relations
+    const includeCommaMatch = line.match(/^include\s+(.+?)\s*,\s*(.+)$/i);
+    if (includeCommaMatch) {
+      const base = wrapUseCase(includeCommaMatch[1]);
+      const includes = includeCommaMatch[2].split(',').map(part => wrapUseCase(part));
+      includes.forEach((inc) => {
+        normalizedLines.push(`${base} ..> ${inc} : <<include>>`);
+      });
+      return;
+    }
+
+    // Convert "extend Manage Profile with (Edit Profile)"
+    const extendWithMatch = line.match(/^extend\s+(.+?)\s+with\s+(.+)$/i);
+    if (extendWithMatch) {
+      const base = wrapUseCase(extendWithMatch[1]);
+      const ext = wrapUseCase(extendWithMatch[2]);
+      normalizedLines.push(`${ext} ..> ${base} : <<extend>>`);
+      return;
+    }
+
     let updated = line;
     updated = updated.replace(/^include\s+(.+?)\s+in\s+\((.+?)\)/i, '$1 ..> ($2) : <<include>>');
     updated = updated.replace(/^extend\s+(.+?)\s+in\s+\((.+?)\)/i, '$1 ..> ($2) : <<extend>>');
-    return `  ${updated}`;
+
+    const arrowActorMatch = updated.match(/^([A-Za-z0-9_]+)\s*-->/);
+    if (arrowActorMatch && !arrowActorMatch[1].startsWith('(')) {
+      referencedActors.add(arrowActorMatch[1]);
+    }
+
+    normalizedLines.push(updated);
   });
+
+  // Ensure actors referenced in arrows are declared
+  const missingActors = Array.from(referencedActors).filter(actor => !declaredActors.has(actor));
+  if (missingActors.length) {
+    const insertAt = normalizedLines.findIndex(line => line === 'usecaseDiagram') + 1;
+    const actorLines = missingActors.map(actor => `actor ${actor}`);
+    normalizedLines.splice(insertAt, 0, ...actorLines);
+  }
+
+  const normalized = normalizedLines.map(line => `  ${line}`).map((line, idx) => idx === 0 ? line.trimStart() : line);
 
   return `\`\`\`mermaid\n${normalized.join('\n')}\n\`\`\``;
 };
